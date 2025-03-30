@@ -23,7 +23,7 @@ const sharedConfig: Options = {
 
 await build({
   format: 'cjs',
-  outDir: 'dist/cjs',
+  outDir: 'cjs',
   tsconfig: './tsconfig.cjs.json',
   splitting: false,
   shims: true,
@@ -31,18 +31,18 @@ await build({
 })
 
 await build({
-  format: 'esm',
-  outDir: 'dist/mjs',
+  format: ['esm'],
+  outDir: 'esm',
   tsconfig: './tsconfig.mjs.json',
   splitting: true,
   cjsInterop: false,
   ...sharedConfig
 })
 
-await writeFile('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }, null, 2))
-await writeFile('dist/mjs/package.json', JSON.stringify({ type: 'module' }, null, 2))
+await writeFile('cjs/package.json', JSON.stringify({ type: 'commonjs' }, null, 2))
+await writeFile('esm/package.json', JSON.stringify({ type: 'module' }, null, 2))
 
-const dtsPath = join(process.cwd(), 'dist/types/ConfigJS.d.ts')
+const dtsPath = join(process.cwd(), 'ConfigJS.d.ts')
 const dtsCode = generateDtsBundle([{
   filePath: join(process.cwd(), 'src/ConfigJS.ts'),
   output: {

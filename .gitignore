@@ -1,6 +1,8 @@
 # dependencies (bun install)
 node_modules
-test
+cjs
+esm
+ConfigJS.d.ts
 # output
 out
 dist

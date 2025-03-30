@@ -27,7 +27,7 @@ jobs:
         run: bun run build
 
       - name: Remove unnecessary files 
-        run: rm -rf node_modules build.ts testando.ts  tsconfig.cjs.json  tsconfig.dts.json  tsconfig.json  tsconfig.mjs.json bun.lockb docs src package-lock.json .github .git .gitignore .gitattributes
+        run: rm -rf node_modules build.ts .tsup tsconfig.cjs.json tsconfig.dts.json tsconfig.json tsconfig.mjs.json bun.lockb docs src package-lock.json .github .git .gitignore .gitattributes
 
       - name: Update Package Version
         run: npm version minor

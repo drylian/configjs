@@ -5,7 +5,7 @@
        "moduleResolution": "Node",
        "target": "es2015",
        "rootDir": "src",
-       "outDir": "dist/cjs",
+       "outDir": "cjs",
        "skipLibCheck": true
     },
     "exclude": ["build"]

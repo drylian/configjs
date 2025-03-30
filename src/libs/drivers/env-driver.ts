@@ -72,7 +72,7 @@ const convertEnvValue = (shape: BaseShape<any>, value: string): any => {
     }
 };
 
-export default new ConfigJSDriver({
+export const envDriver = new ConfigJSDriver({
     async: false,
     supported: [StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape],
     
@@ -176,3 +176,4 @@ export default new ConfigJSDriver({
         return true;
     },
 });
+export default envDriver;

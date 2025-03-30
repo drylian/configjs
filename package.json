@@ -2,10 +2,10 @@
   "name": "@caeljs/config",
   "type": "module",
   "description": "Simple system of standardization of configurations for node js.",
-  "version": "0.1.1",
-  "main": "configjs.cjs",
-  "module": "configjs.mjs",
-  "types": "types/configjs.d.ts",
+  "version": "0.2.1",
+  "main": "dist/cjs/ConfigJS.cjs",
+  "module": "dist/mjs/ConfigJS.mjs",
+  "types": "dist/types/ConfigJS.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/drylian/configjs.git"
@@ -13,15 +13,15 @@
   "typesVersions": {
     "*": {
       ".": [
-        "./types/configjs.d.ts"
+        "./dist/types/ConfigJS.d.ts"
       ]
     }
   },
   "exports": {
     ".": {
-      "types": "./types/configjs.d.ts",
-      "import": "./configjs.mjs",
-      "require": "./configjs.cjs"
+      "types": "./dist/types/ConfigJS.d.ts",
+      "import": "./dist/mjs/ConfigJS.mjs",
+      "require": "./dist/cjs/ConfigJS.cjs"
     }
   },
   "keywords": [

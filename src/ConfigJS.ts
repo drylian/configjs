@@ -67,7 +67,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
 
     public get<Path extends ConfigJSPaths<Shapes>>(path: Path) {
         const schema = this.getSchema(path);
-        return this.driver.get.bind(this)(schema) as ConfigJSResult<typeof this.async, GetValueType<Shapes, Path>>;
+        return this.driver.get.bind(this)(schema) as ConfigJSResult<ConfigDriver['async'], GetValueType<Shapes, Path>>;
     }
 
     public set<Path extends ConfigJSPaths<Shapes>>(
@@ -75,7 +75,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         value: GetValueType<Shapes, Path>
     ) {
         const schema = this.getSchema(path);
-        return this.driver.set.bind(this)(schema, value as never) as ConfigJSResult<typeof this.async, ConfigInferNestedType<Shapes>[Path]>;
+        return this.driver.set.bind(this)(schema, value as never) as ConfigJSResult<ConfigDriver['async'], ConfigInferNestedType<Shapes>[Path]>;
     }
 
     public del<Path extends ConfigJSPaths<Shapes>>(path: Path){

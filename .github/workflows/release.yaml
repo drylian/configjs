@@ -1,0 +1,44 @@
+name: Publish @Caeljs/Config package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    name: Publish to NPM Registry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      
+      - name: Installing dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Loggings
+        run: bun run build
+
+      - name: Remove unnecessary files 
+        run: rm -rf node_modules build.ts testando.ts  tsconfig.cjs.json  tsconfig.dts.json  tsconfig.json  tsconfig.mjs.json bun.lockb docs src package-lock.json .github .git .gitignore .gitattributes
+
+      - name: Update Package Version
+        run: npm version minor
+      
+      - name: Setup Node for Publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publishing
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

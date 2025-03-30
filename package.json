@@ -1,0 +1,59 @@
+{
+  "name": "@caeljs/config",
+  "type": "module",
+  "description": "Simple system of standardization of configurations for node js.",
+  "version": "0.1.0",
+  "main": "configjs.cjs",
+  "module": "configjs.mjs",
+  "types": "types/configjs.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drylian/configjs.git"
+  },
+  "typesVersions": {
+    "*": {
+      ".": [
+        "./types/configjs.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./types/configjs.d.ts",
+      "import": "./configjs.mjs",
+      "require": "./configjs.cjs"
+    }
+  },
+  "keywords": [
+    "backend",
+    "standardization",
+    "standard",
+    "env",
+    "json",
+    "config",
+    "configjs",
+    "npm",
+    "node",
+    "bun",
+    "deno",
+    "typescript",
+    "debug",
+    "output",
+    "performance"
+  ],
+  "author": "Drylian",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/drylian/configjs/issues"
+  },
+  "homepage": "https://github.com/drylian/configjs#readme",
+  "scripts": {
+    "build": "bun run build.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "dts-bundle-generator": "^9.5.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.0.0"
+  }
+}

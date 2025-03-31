@@ -83,6 +83,7 @@ export const envDriver = new ConfigJSDriver({
          * // Warning: Node JS not support this feature
          * ```
          */
+        //@ts-expect-error It doesn't pay to install the bun just for that
         processEnv: typeof Bun !== "undefined" ? true : false
     },
 

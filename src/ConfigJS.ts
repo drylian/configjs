@@ -1,3 +1,4 @@
+import { processShapes } from "./libs/functions";
 import { BaseShape } from "./libs/shapes/base-shape";
 export * from "./libs/factory";
 export * from "./libs/drivers/env-driver";
@@ -12,26 +13,10 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
     public readonly shapes: Shapes;
 
     constructor(public readonly driver: ConfigDriver & { async: ConfigDriver['async'] }, shapes: Shapes) {
-        this.processShapes(shapes);
+        processShapes(shapes);
         this.shapes = shapes;
         this.cached = {} as ConfigInferNestedType<Shapes>;
         this.async = this.driver.async;
-    }
-
-    private processShapes(shapes: AnyConfigJSNestedShapes, prefix = '') {
-        Object.keys(shapes).forEach(key => {
-            const fullPath = prefix ? `${prefix}.${key}` : key;
-            const shapeOrShapes = shapes[key];
-            
-            if (shapeOrShapes instanceof BaseShape) {
-                if (shapeOrShapes._prop === "_unconfigured_property") {
-                    shapeOrShapes.prop(fullPath);
-                }
-                shapeOrShapes._key = fullPath;
-            } else if (typeof shapeOrShapes === 'object' && shapeOrShapes !== null) {
-                this.processShapes(shapeOrShapes, fullPath);
-            }
-        });
     }
 
     public getSchema<Path extends ConfigJSPaths<Shapes>>(path: Path) {

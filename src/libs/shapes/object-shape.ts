@@ -1,6 +1,7 @@
 import { BaseShape } from './base-shape';
 import { type ShapeDef, type InferType } from '../types';
 import { ConfigShapeError, type ErrorCreator } from '../error';
+import { processShapes } from '../functions';
 
 type ShapeObject<T extends Record<string, ShapeDef<any>>> = {
     [K in keyof T]: InferType<T[K]>;
@@ -77,9 +78,11 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
 
 export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseShape<ShapeObject<T>> {
     public readonly _type = "object";
-
-    constructor(private readonly _shape: T) {
+    private readonly _shape: T;
+    constructor(_shape: T) {
         super();
+        processShapes(_shape);
+        this._shape = _shape;
     }
 
     parse(value: unknown): ShapeObject<T> {
@@ -103,7 +106,7 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
                 else if (value !== shape) {
                     throw new ConfigShapeError({
                         code: 'INVALID_LITERAL',
-                        path: `${this._prop}.${key}`,
+                        path: `${key}`,
                         message: `Expected ${JSON.stringify(shape)}`,
                         value
                     });
@@ -131,5 +134,12 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
             });
         }
         return new PartialShape(this);
+    }
+
+    merge<U extends Record<string, ShapeDef<any>>>(shape: ObjectShape<U>): ObjectShape<T & U> {
+        return new ObjectShape({
+            ...this._shape,
+            ...shape._shape
+        }) as ObjectShape<T & U>;
     }
 }

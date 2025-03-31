@@ -100,11 +100,11 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
     }
   }
 
-  private _applyTransforms(value: T): T {
+  _applyTransforms(value: T): T {
     return this._transforms.reduce((val, transform) => transform(val), value);
   }
 
-  private _applyRefinements(value: T, path: string): T {
+  _applyRefinements(value: T, path: string): T {
     for (const refinement of this._refinements) {
       if (!refinement.fn(value)) {
         throw new ConfigShapeError({

@@ -1,42 +1,11 @@
 // string-shape.ts
 import { BaseShape } from './base-shape';
 
-const ERRORS = {
-  NOT_STRING: (value: unknown, path?: string) => ({
-    code: 'NOT_STRING',
-    path: path || '',
-    message: 'Expected a string',
-    value
-  }),
-  MIN_LENGTH: (min: number, value: unknown, path?: string) => ({
-    code: 'STRING_TOO_SHORT',
-    path: path || '',
-    message: `String must be at least ${min} characters long`,
-    value,
-    meta: { minLength: min, actualLength: typeof value === 'string' ? value.length : undefined }
-  }),
-  MAX_LENGTH: (max: number, value: unknown, path?: string) => ({
-    code: 'STRING_TOO_LONG',
-    path: path || '',
-    message: `String must be at most ${max} characters long`,
-    value,
-    meta: { maxLength: max, actualLength: typeof value === 'string' ? value.length : undefined }
-  }),
-  REGEX_MISMATCH: (regex: RegExp, value: unknown, path?: string) => ({
-    code: 'REGEX_MISMATCH',
-    path: path || '',
-    message: `String must match pattern ${regex}`,
-    value,
-    meta: { pattern: regex.toString() }
-  })
-};
-
 export class StringShape extends BaseShape<string> {
   public readonly _type = "string";
-
-  private _minLength?: number;
-  private _maxLength?: number;
-  private _regex?: RegExp;
+  public _min?:number;
+  public _max?:number;
+  public _email?:boolean = false;
   private _coerce = false;
 
   parse(value: unknown): string {
@@ -53,39 +22,26 @@ export class StringShape extends BaseShape<string> {
     }
 
     if (typeof value !== 'string') {
-      this.createError(ERRORS.NOT_STRING, value);
+      this.createError((v, p) => ({
+        code: 'NOT_STRING',
+        path: p || '',
+        message: 'Expected a string',
+        value: v
+      }), value);
     }
 
-    if (this._minLength !== undefined && value.length < this._minLength) {
-      this.createError(
-        (val, path) => ERRORS.MIN_LENGTH(this._minLength!, val, path), 
-        value
-      );
-    }
-
-    if (this._maxLength !== undefined && value.length > this._maxLength) {
-      this.createError(
-        (val, path) => ERRORS.MAX_LENGTH(this._maxLength!, val, path), 
-        value
-      );
-    }
-
-    if (this._regex !== undefined && !this._regex.test(value)) {
-      this.createError(
-        (val, path) => ERRORS.REGEX_MISMATCH(this._regex!, val, path), 
-        value
-      );
-    }
-
-    return this._checkImportant(value);
+    return this._checkImportant(this._applyRefinements(value, this._key));
   }
 
   min(length: number): this {
-    this._minLength = length;
+    this._min = length;
     return this.refine(
       (val) => val.length >= length,
       `String must be at least ${length} characters long`,
-      'STRING_TOO_SHORT'
+      'STRING_TOO_SHORT',
+      {
+        min: length
+      }
     );
   }
 
@@ -95,20 +51,34 @@ export class StringShape extends BaseShape<string> {
   }
 
   max(length: number): this {
-    this._maxLength = length;
+    this._max = length;
     return this.refine(
       (val) => val.length <= length,
       `String must be at most ${length} characters long`,
-      'STRING_TOO_LONG'
+      'STRING_TOO_LONG',
+      {
+        max: length
+      }
     );
   }
 
   regex(pattern: RegExp): this {
-    this._regex = pattern;
     return this.refine(
       (val) => pattern.test(val),
       `String must match pattern ${pattern}`,
-      'REGEX_MISMATCH'
+      'REGEX_MISMATCH',
+      {
+        regex: pattern.source
+      }
+    );
+  }
+
+  email(): this {
+    this._email = true;
+    return this.refine(
+      (val) => /^[a-zA-Z0-9.!#$%&'*+\=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/.test(val),
+      `Email is invalid`,
+      'INVALID_EMAIL'
     );
   }
 }

@@ -19,8 +19,9 @@ export abstract class BaseShapeAbstract<T> {
 
     public safeParse(value: unknown): { values: T, success: boolean, error: ConfigShapeError | undefined } {
         try {
+            const result = this.parse(value);
             return {
-                values: this.parse(value),
+                values: result,
                 success: true,
                 error: undefined
             };

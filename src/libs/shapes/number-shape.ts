@@ -38,10 +38,10 @@ const NUMBER_ERRORS = {
 
 export class NumberShape extends BaseShape<number> {
   public readonly _type = "number";
-  private _min?: number;
-  private _max?: number;
-  private _int = false;
-  private _coerce = false;
+  public _min?: number;
+  public _max?: number;
+  public _int = false;
+  public _coerce = false;
 
   coerce(): this {
     this._coerce = true;
@@ -70,21 +70,7 @@ export class NumberShape extends BaseShape<number> {
       this.createError(NUMBER_ERRORS.NOT_NUMBER, value);
     }
 
-    const numValue = value as number;
-
-    if (this._min !== undefined && numValue < this._min) {
-      this.createError(NUMBER_ERRORS.MIN_VALUE(this._min), numValue);
-    }
-
-    if (this._max !== undefined && numValue > this._max) {
-      this.createError(NUMBER_ERRORS.MAX_VALUE(this._max), numValue);
-    }
-
-    if (this._int && !Number.isInteger(numValue)) {
-      this.createError(NUMBER_ERRORS.NOT_INTEGER, numValue);
-    }
-
-    return this._checkImportant(numValue);
+    return this._checkImportant(this._applyRefinements(value, this._key));
   }
 
   min(value: number): this {

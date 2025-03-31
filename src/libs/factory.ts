@@ -22,5 +22,59 @@ export const c = {
     string: () => new StringShape().coerce(),
     number: () => new NumberShape().coerce(),
     boolean: () => new BooleanShape().coerce(),
+  },
+  /**
+   * Random string
+   * 
+   * @utils
+   */
+  random: (length: number = 64, ext: boolean = false): string => {
+    let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    if (ext) {
+      chars += "!@#$%^&*()_+-={}[]|:;<>,.?/~`";
+    }
+
+    let result = "";
+    const charsLength = chars.length;
+
+    const buffer = new Array(4);
+
+    for (let i = 0; i < length; i++) {
+      for (let j = 0; j < 4; j++) {
+        buffer[j] = Math.random();
+      }
+
+      const combinedRandom = buffer.reduce((acc, val, idx) => {
+        return acc + (val / (idx + 1));
+      }, 0) % 1;
+
+      const randomIndex = Math.floor(combinedRandom * charsLength);
+      result += chars[randomIndex];
+    }
+
+    return result;
+  },
+  /**
+   * Random int (default 1 ~ 1000)
+   * 
+   * @utils
+   */
+  randomInt: (min: number = 1, max: number = 1000): number => {
+    if (min > max) [min, max] = [max, min]; // Swap if min > max
+
+    min = Math.ceil(min);
+    max = Math.floor(max);
+
+    const buffer = new Array(4);
+    for (let i = 0; i < 4; i++) {
+      buffer[i] = Math.random();
+    }
+
+    const combinedRandom = buffer.reduce((acc, val, idx) => {
+      return acc + (val / (idx + 1));
+    }, 0) % 1;
+
+    return Math.floor(combinedRandom * (max - min + 1)) + min;
   }
+
 };

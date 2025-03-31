@@ -38,7 +38,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
       this.createError(ARRAY_ERRORS.NOT_ARRAY, value);
     }
 
-    return value.map((item, index) => {
+    return this._checkImportant(value.map((item, index) => {
       try {
         if (this._shape instanceof BaseShape) {
           return this._shape.parseWithPath(item, `${this._prop}[${index}]`);
@@ -59,6 +59,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
         }
         this.createError(ARRAY_ERRORS.INVALID_ELEMENT(index), item);
       }
-    });
+    }));
+
   }
 }

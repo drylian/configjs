@@ -77,7 +77,7 @@ export class StringShape extends BaseShape<string> {
       );
     }
 
-    return value;
+    return this._checkImportant(value);
   }
 
   min(length: number): this {

@@ -2,10 +2,24 @@ import { BaseShapeAbstract } from "./base-abstract";
 import { OptionalShape } from "./optional-shape";
 import { NullableShape } from "./nullable-shape";
 import { TransformShape } from "./transform-shape";
-import { ConfigShapeError } from "../error";
+import { ConfigShapeError, type ErrorCreator } from "../error";
 
 export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   abstract readonly _type: string;
+
+  protected createError(creator: ErrorCreator, value: unknown, path = ''): never {
+    const fullPath = this._prop !== '_unconfigured_property'
+      ? `${path ? `${path}.` : ''}${this._prop}`
+      : path;
+    const data = creator(value, fullPath);
+    throw new ConfigShapeError({
+      ...data,
+      meta: {
+        ...this.conf(),
+        ...data.meta ?? {}
+      }
+    });
+  }
 
   optional(): OptionalShape<T> {
     return new OptionalShape(this);
@@ -27,6 +41,8 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
       type: this._type,
       default: this._default,
       description: this._description,
+      important: this._important,
+      save_default: this._save_default,
     };
   }
 
@@ -41,15 +57,30 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   }
 
   parseWithDefault(value: unknown): T {
-    if (value === undefined && this._default !== undefined) {
+    if (typeof value === "undefined" && typeof this._default !== "undefined") {
       return this._applyTransforms(this._default);
     }
     return this.parse(value);
   }
 
+  _checkImportant(value: T): T {
+    if ((typeof value === "undefined" || value === null) && this._important) {
+      throw new ConfigShapeError({
+        code: 'IMPORTANT_PROPERTY',
+        path: `${this._key} - (prop: '${this._prop}')`,
+        message: `The property '${this._prop}' is marked as required but was not provided. Please define this value before proceeding.`,
+        value,
+        meta: {
+          ...this.conf()
+        }
+      });
+    }
+    return value;
+  }
+
   parseWithPath(value: unknown, path = ''): T {
     try {
-      const parsed = this.parse(value);
+      const parsed = this.parseWithDefault(value);
       return this._applyRefinements(parsed, path);
     } catch (error) {
       if (error instanceof ConfigShapeError) {
@@ -61,7 +92,10 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
           ? `${path ? `${path}.` : ''}${this._prop}`
           : path,
         message: error instanceof Error ? error.message : 'Unknown error',
-        value
+        value,
+        meta: {
+          ...this.conf()
+        }
       });
     }
   }
@@ -80,7 +114,10 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
             : path,
           message: refinement.message,
           value,
-          meta: refinement.meta
+          meta: {
+            ...this.conf(),
+            ...refinement.meta ?? {},
+          }
         });
       }
     }

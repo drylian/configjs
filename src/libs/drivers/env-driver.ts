@@ -28,7 +28,7 @@ const writeEnvFile = (path: string, data: Record<string, string>, force = false)
     const existing = readEnvFile(path);
     const content = Object.entries({ ...existing, ...data })
         .map(([key, value]) => {
-            if(existing[key] && !data[key]) return  `${key}=`;
+            if (existing[key] && !data[key]) return `${key}=`;
             // Escape quotes and newlines in values
             const escapedValue = value.replace(/"/g, '\\"').replace(/\n/g, '\\n');
             return `${key}="${escapedValue}"`;
@@ -39,20 +39,7 @@ const writeEnvFile = (path: string, data: Record<string, string>, force = false)
 };
 
 const convertEnvValue = (shape: BaseShape<any>, value: string): any => {
-    const conf = shape.conf();
-    if (value === undefined || value === null) {
-        return conf.default;
-    }
-
     try {
-        // Special handling for boolean values
-        if (shape instanceof BooleanShape) {
-            if (value.toLowerCase() === 'true') return true;
-            if (value.toLowerCase() === 'false') return false;
-            if (value === '1') return true;
-            if (value === '0') return false;
-        }
-
         // Special handling for array values
         if (shape instanceof ArrayShape) {
             return JSON.parse(value);
@@ -65,9 +52,6 @@ const convertEnvValue = (shape: BaseShape<any>, value: string): any => {
 
         return shape.parse(value);
     } catch (error) {
-        if (conf.default !== undefined) {
-            return conf.default;
-        }
         throw error;
     }
 };
@@ -75,14 +59,31 @@ const convertEnvValue = (shape: BaseShape<any>, value: string): any => {
 export const envDriver = new ConfigJSDriver({
     async: false,
     supported: [StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape],
-    
+
     supported_check(shape) {
         return this.driver.supported.some(SupportedShape => shape instanceof SupportedShape);
     },
 
     config: {
+        /**
+         * File locale of env
+         */
         filepath: ".env",
-        processEnv: true
+        /**
+         * Allow to inject config in processEnv
+         * e.g:
+         * 
+         * ```ts
+         * process.env["key"] = true // is same instance.set("key", true)
+         *  
+         * // and
+         * 
+         * process.env["key"] // is same instance.get("key")
+         * 
+         * // Warning: Node JS not support this feature
+         * ```
+         */
+        processEnv: typeof Bun !== "undefined" ? true : false
     },
 
     get(shape) {
@@ -96,8 +97,8 @@ export const envDriver = new ConfigJSDriver({
         const rawValue = contents[conf.prop] ?? contents[conf.key];
 
         try {
-            return rawValue !== undefined 
-                ? convertEnvValue(shape, rawValue) 
+            return rawValue !== undefined
+                ? convertEnvValue(shape, rawValue) ?? conf.default
                 : conf.default;
         } catch (err) {
             const error = err as Error;
@@ -156,11 +157,10 @@ export const envDriver = new ConfigJSDriver({
     },
 
     load(shapes) {
-        if (this.config.processEnv) {            
+        if (this.config.processEnv) {
             shapes.forEach(shape => {
                 const conf = shape.conf();
                 if (!this.driver.supported_check.bind(this)(shape)) return;
-
                 Object.defineProperty(process.env, conf.prop, {
                     get: () => {
                         return this.get(conf.key);
@@ -173,6 +173,18 @@ export const envDriver = new ConfigJSDriver({
                 });
             });
         }
+        shapes.forEach(shape => {
+            if (!this.driver.supported_check.bind(this)(shape)) return;
+            const conf = shape.conf();
+            const contents = readEnvFile(this.config.filepath);
+            const rawValue = contents[conf.prop] ?? contents[conf.key];
+
+            if (typeof rawValue == "undefined" && conf.save_default && conf.default) {
+                this.set(conf.key, conf.default)
+            }
+            shape._checkImportant(rawValue ?? conf.default)
+        });
+
         return true;
     },
 });

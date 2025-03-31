@@ -84,7 +84,7 @@ export class NumberShape extends BaseShape<number> {
       this.createError(NUMBER_ERRORS.NOT_INTEGER, numValue);
     }
 
-    return numValue;
+    return this._checkImportant(numValue);
   }
 
   min(value: number): this {

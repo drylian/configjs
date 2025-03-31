@@ -40,10 +40,6 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
   }
 
   parse(value: unknown): Record<K, InferType<V>> {
-    if (value === undefined && this._default !== undefined) {
-      return this._default;
-    }
-
     if (value === null || typeof value !== 'object') {
       this.createError(RECORD_ERRORS.NOT_OBJECT, value);
     }
@@ -62,7 +58,6 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         this.createError(RECORD_ERRORS.INVALID_PROPERTY(key), input[key]);
       }
     }
-
-    return result as Record<K, InferType<V>>;
+    return this._checkImportant(result) as Record<K, InferType<V>>;
   }
 }

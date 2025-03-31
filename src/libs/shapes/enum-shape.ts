@@ -35,6 +35,6 @@ export class EnumShape<T extends (string | number)> extends BaseShape<T> {
         value
       );
     }
-    return value as T;
+    return this._checkImportant(value as T);
   }
 }

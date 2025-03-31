@@ -2,7 +2,7 @@
   "name": "@caeljs/config",
   "type": "module",
   "description": "Simple system of standardization of configurations for node js.",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "main": "cjs/ConfigJS.cjs",
   "module": "esm/ConfigJS.js",
   "types": "ConfigJS.d.ts",

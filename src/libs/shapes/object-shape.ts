@@ -39,9 +39,6 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
     }
 
     parse(value: unknown): Partial<InferType<T>> {
-        if (value === undefined && this._default !== undefined) {
-            return this._default;
-        }
 
         if (value === null || typeof value !== 'object') {
             this.createError(OBJECT_ERRORS.NOT_OBJECT, value);
@@ -86,19 +83,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
     }
 
     parse(value: unknown): ShapeObject<T> {
-        if ((value == null) && this._default !== undefined) {
-            return this._default;
-        }
-
         if (typeof value !== 'object' || value === null) {
             this.createError(OBJECT_ERRORS.NOT_OBJECT, value);
-        }
-        if ((value == null) && this._default !== undefined) {
-            return this._default;
-        }
-
-        if (typeof value !== 'object' || value === null) {
-            throw new Error('Expected an object');
         }
 
         const result: any = {};
@@ -132,7 +118,7 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
             }
         }
 
-        return result;
+        return this._checkImportant(result);
     }
 
     partial(): PartialShape<this> {

@@ -4,6 +4,8 @@ export abstract class BaseShapeAbstract<T> {
     protected _default?: T;
     public _prop = "_unconfigured_property";
     public _key = "_unconfigured_property";
+    protected _important = false;
+    protected _save_default = false;
     protected _description?: string;
     protected _transforms: Array<(value: T) => T> = [];
     protected _refinements: Array<{
@@ -14,14 +16,6 @@ export abstract class BaseShapeAbstract<T> {
     }> = [];
 
     abstract parse(value: unknown): T;
-
-    protected createError(creator: ErrorCreator, value: unknown, path = ''): never {
-        const fullPath = this._prop !== '_unconfigured_property'
-            ? `${path ? `${path}.` : ''}${this._prop}`
-            : path;
-
-        throw new ConfigShapeError(creator(value, fullPath));
-    }
 
     public safeParse(value: unknown): { values: T, success: boolean, error: ConfigShapeError | undefined } {
         try {
@@ -41,6 +35,16 @@ export abstract class BaseShapeAbstract<T> {
 
     default(value: T): this {
         this._default = value;
+        return this;
+    }
+
+    important(): this {
+        this._important = true;
+        return this;
+    }
+
+    save(): this {
+        this._save_default = true;
         return this;
     }
 

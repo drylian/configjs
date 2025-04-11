@@ -34,6 +34,9 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
   }
 
   parse(value: unknown): Array<InferType<T>> {
+    if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
+    if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
+
     if (!Array.isArray(value)) {
       this.createError(ARRAY_ERRORS.NOT_ARRAY, value);
     }

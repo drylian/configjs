@@ -6,6 +6,7 @@ import { EnumShape } from "../shapes/enum-shape";
 import { ArrayShape } from "../shapes/array-shape";
 import { BooleanShape } from "../shapes/boolean-shape";
 import type { BaseShape } from "../shapes/base-shape";
+import { BaseShapeAbstract } from "../shapes/base-abstract";
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
 
@@ -155,6 +156,45 @@ export const envDriver = new ConfigJSDriver({
 
     save() {
         return true;
+    },
+
+    root(object_shape, contented?:Record<string,any>) {
+        const result: any = {};
+        const contents = typeof contented !== "undefined" ? contented : readEnvFile(this.config.filepath);
+
+        for (const key in object_shape) {
+            const shape_or_object = object_shape[key];
+
+            if (shape_or_object instanceof BaseShapeAbstract) {
+                // Caso base: é um BaseShape
+                if (!this.driver.supported_check.bind(this)(shape_or_object)) {
+                    console.warn(`[EnvDriver] Unsupported shape type for key: ${key}`);
+                    continue;
+                }
+
+                const conf = shape_or_object.conf();
+                const rawValue = contents[conf.prop] ?? contents[conf.key];
+
+                try {
+                    result[key] = rawValue !== undefined
+                        ? convertEnvValue(shape_or_object, rawValue) ?? conf.default
+                        : conf.default;
+                } catch (err) {
+                    const error = err as Error;
+                    console.warn(`[EnvDriver] Error parsing value for ${key}: ${error.message}`);
+                    result[key] = conf.default;
+                }
+            } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {
+                //@ts-expect-error recursive declaration
+                result[key] = this.driver.root.bind(this)(shape_or_object, contents);
+            } else {
+                result[key] = shape_or_object;
+            }
+        }
+
+        return result;
+
+
     },
 
     load(shapes) {

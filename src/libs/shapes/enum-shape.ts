@@ -25,6 +25,8 @@ export class EnumShape<T extends (string | number)> extends BaseShape<T> {
   }
 
   parse(value: unknown): T {
+    if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
+    if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
     if (!this._values.includes(value as T)) {
       this.createError(
         createEnumError({

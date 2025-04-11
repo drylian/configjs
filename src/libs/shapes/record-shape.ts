@@ -28,10 +28,10 @@ const RECORD_ERRORS = {
   })
 };
 
-export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>> 
+export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>>
   extends BaseShape<Record<K, InferType<V>>> {
-    public readonly _type = "record";
-  
+  public readonly _type = "record";
+
   constructor(
     private readonly _keyShape: BaseShape<K>,
     private readonly _valueShape: V
@@ -39,7 +39,9 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
     super();
   }
 
-  parse(value: unknown): Record<K, InferType<V>> {
+  parse(value: unknown):Record<K, InferType<V>>  {
+    if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
+    if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
     if (value === null || typeof value !== 'object') {
       this.createError(RECORD_ERRORS.NOT_OBJECT, value);
     }
@@ -58,6 +60,6 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         this.createError(RECORD_ERRORS.INVALID_PROPERTY(key), input[key]);
       }
     }
-    return this._checkImportant(result) as Record<K, InferType<V>>;
+    return this._checkImportant(result);
   }
 }

@@ -3,12 +3,28 @@ import { BaseShape } from './base-shape';
 
 export class StringShape extends BaseShape<string> {
   public readonly _type = "string";
-  public _min?:number;
-  public _max?:number;
-  public _email?:boolean = false;
+  public _min?: number;
+  public _max?: number;
+  public _email?: boolean = false;
+  public _url?: boolean = false;
+  public _uuid?: boolean = false;
+  public _creditCard?: boolean = false;
+  public _hexColor?: boolean = false;
+  public _ipAddress?: boolean = false;
+  public _isoDate?: boolean = false;
+  public _trimmed?: boolean = false;
+  public _lowercase?: boolean = false;
+  public _uppercase?: boolean = false;
+  public _alphanumeric?: boolean = false;
+  public _contains?: string;
+  public _startsWith?: string;
+  public _endsWith?: string;
   private _coerce = false;
 
   parse(value: unknown): string {
+    if (typeof value === "undefined" && this._optional) return undefined as never;
+    if (value === null && this._nullable) return null as never;
+    
     if (this._coerce) {
       if (value === null || value === undefined) {
         value = '';
@@ -30,7 +46,20 @@ export class StringShape extends BaseShape<string> {
       }), value);
     }
 
-    return this._checkImportant(this._applyRefinements(value, this._key));
+    let result = value as string;
+
+    // Apply transformations
+    if (this._trimmed) {
+      result = result.trim();
+    }
+    if (this._lowercase) {
+      result = result.toLowerCase();
+    }
+    if (this._uppercase) {
+      result = result.toUpperCase();
+    }
+
+    return this._checkImportant(this._applyRefinements(result, this._key));
   }
 
   min(length: number): this {
@@ -45,11 +74,6 @@ export class StringShape extends BaseShape<string> {
     );
   }
 
-  coerce(): this {
-    this._coerce = true;
-    return this;
-  }
-
   max(length: number): this {
     this._max = length;
     return this.refine(
@@ -60,6 +84,22 @@ export class StringShape extends BaseShape<string> {
         max: length
       }
     );
+  }
+
+  length(length: number): this {
+    return this.refine(
+      (val) => val.length === length,
+      `String must be exactly ${length} characters long`,
+      'STRING_LENGTH_MISMATCH',
+      {
+        length
+      }
+    );
+  }
+
+  coerce(): this {
+    this._coerce = true;
+    return this;
   }
 
   regex(pattern: RegExp): this {
@@ -79,6 +119,195 @@ export class StringShape extends BaseShape<string> {
       (val) => /^[a-zA-Z0-9.!#$%&'*+\=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/.test(val),
       `Email is invalid`,
       'INVALID_EMAIL'
+    );
+  }
+
+  url(): this {
+    this._url = true;
+    return this.refine(
+      (val) => {
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      `URL is invalid`,
+      'INVALID_URL'
+    );
+  }
+
+  uuid(): this {
+    this._uuid = true;
+    return this.refine(
+      (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val),
+      `UUID is invalid`,
+      'INVALID_UUID'
+    );
+  }
+
+  creditCard(): this {
+    this._creditCard = true;
+    return this.refine(
+      (val) => {
+        // Luhn algorithm check for credit cards
+        const sanitized = val.replace(/\D/g, '');
+        if (!/^[0-9]{13,19}$/.test(sanitized)) return false;
+        
+        let sum = 0;
+        for (let i = 0; i < sanitized.length; i++) {
+          let digit = parseInt(sanitized[i], 10);
+          if ((i + sanitized.length) % 2 === 0) {
+            digit *= 2;
+            if (digit > 9) digit -= 9;
+          }
+          sum += digit;
+        }
+        return sum % 10 === 0;
+      },
+      `Credit card number is invalid`,
+      'INVALID_CREDIT_CARD'
+    );
+  }
+
+  hexColor(): this {
+    this._hexColor = true;
+    return this.refine(
+      (val) => /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(val),
+      `Hex color is invalid`,
+      'INVALID_HEX_COLOR'
+    );
+  }
+
+  ipAddress(): this {
+    this._ipAddress = true;
+    return this.refine(
+      (val) => {
+        // IPv4 or IPv6
+        return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(val) || 
+               /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/.test(val);
+      },
+      `IP address is invalid`,
+      'INVALID_IP_ADDRESS'
+    );
+  }
+
+  isoDate(): this {
+    this._isoDate = true;
+    return this.refine(
+      (val) => !isNaN(Date.parse(val)) && new Date(val).toISOString() === val,
+      `Date must be in ISO format`,
+      'INVALID_ISO_DATE'
+    );
+  }
+
+  trimmed(): this {
+    this._trimmed = true;
+    return this;
+  }
+
+  lowercase(): this {
+    this._lowercase = true;
+    return this;
+  }
+
+  uppercase(): this {
+    this._uppercase = true;
+    return this;
+  }
+
+  alphanumeric(): this {
+    this._alphanumeric = true;
+    return this.refine(
+      (val) => /^[a-zA-Z0-9]+$/.test(val),
+      `String must contain only alphanumeric characters`,
+      'INVALID_ALPHANUMERIC'
+    );
+  }
+
+  contains(substring: string): this {
+    this._contains = substring;
+    return this.refine(
+      (val) => val.includes(substring),
+      `String must contain "${substring}"`,
+      'MISSING_SUBSTRING'
+    );
+  }
+
+  startsWith(prefix: string): this {
+    this._startsWith = prefix;
+    return this.refine(
+      (val) => val.startsWith(prefix),
+      `String must start with "${prefix}"`,
+      'MISSING_PREFIX'
+    );
+  }
+
+  endsWith(suffix: string): this {
+    this._endsWith = suffix;
+    return this.refine(
+      (val) => val.endsWith(suffix),
+      `String must end with "${suffix}"`,
+      'MISSING_SUFFIX'
+    );
+  }
+
+  oneOf(options: string[]): this {
+    return this.refine(
+      (val) => options.includes(val),
+      `String must be one of: ${options.join(', ')}`,
+      'VALUE_NOT_IN_OPTIONS',
+      {
+        options
+      }
+    );
+  }
+
+  notEmpty(): this {
+    return this.refine(
+      (val) => val.length > 0,
+      `String must not be empty`,
+      'EMPTY_STRING'
+    );
+  }
+
+  asNumber(): this {
+    return this.refine(
+      (val) => !isNaN(parseFloat(val)),
+      `String must represent a valid number`,
+      'INVALID_NUMBER_STRING'
+    );
+  }
+
+  asInteger(): this {
+    return this.refine(
+      (val) => /^-?\d+$/.test(val),
+      `String must represent a valid integer`,
+      'INVALID_INTEGER_STRING'
+    );
+  }
+
+  asBoolean(): this {
+    return this.refine(
+      (val) => ['true', 'false', '1', '0'].includes(val.toLowerCase()),
+      `String must represent a boolean (true/false/1/0)`,
+      'INVALID_BOOLEAN_STRING'
+    );
+  }
+
+  asJson(): this {
+    return this.refine(
+      (val) => {
+        try {
+          JSON.parse(val);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      `String must be valid JSON`,
+      'INVALID_JSON'
     );
   }
 }

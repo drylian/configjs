@@ -30,6 +30,8 @@ export class BooleanShape extends BaseShape<boolean> {
   }
 
   parse(value: unknown): boolean {
+    if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
+    if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
     if (this._coerce) {
       if (value === 'true' || value === '1') return true;
       if (value === 'false' || value === '0') return false;

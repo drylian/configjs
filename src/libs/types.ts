@@ -2,12 +2,35 @@ import type { ConfigJS } from "../ConfigJS";
 import type { ArrayShape } from "./shapes/array-shape";
 import type { BaseShape } from "./shapes/base-shape";
 import type { BooleanShape } from "./shapes/boolean-shape";
-import type { NullableShape } from "./shapes/nullable-shape";
 import type { NumberShape } from "./shapes/number-shape";
 import type { ObjectShape, PartialShape } from "./shapes/object-shape";
-import type { OptionalShape } from "./shapes/optional-shape";
 import type { RecordShape } from "./shapes/record-shape";
 import type { StringShape } from "./shapes/string-shape";
+
+export type ConfigJSRootPaths<T> =
+  T extends BaseShape<any>
+  ? never
+  : T extends object
+  ? {
+    [K in keyof T & string]:
+    T[K] extends BaseShape<any>
+    ? never
+    : T[K] extends object
+    ? `${K}` | `${K}.${ConfigJSRootPaths<T[K]>}`
+    : never
+  }[keyof T & string]
+  : never;
+
+  export type RecursiveConfigJSResult<T, Path extends string> =
+  Path extends `${infer Key}.${infer Rest}`
+    ? Key extends keyof T
+      ? RecursiveConfigJSResult<T[Key], Rest>
+      : never
+    : Path extends keyof T
+      ? T[Path] extends Record<string, any>
+        ? { [K in keyof T[Path]]: InferType<T[Path][K]> }
+        : never
+      : never;
 
 export type ConfigJSPaths<T> = T extends BaseShape<any>
   ? never
@@ -45,8 +68,6 @@ export type InferType<T> =
   T extends BooleanShape ? boolean :
 
   // Shapes especiais
-  T extends OptionalShape<infer U> ? InferType<U> | undefined :
-  T extends NullableShape<infer U> ? InferType<U> | null :
   T extends PartialShape<infer U> ? Partial<InferType<U>> :
 
   // Arrays
@@ -76,6 +97,7 @@ export type AnyConfigTypedDriver<DriverAsync extends boolean, DriverConfig exten
   supported: (new (...any: any) => BaseShape<any>)[];
   set(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>, value: InferType<BaseShape<any>>): DriverAsync extends true ? Promise<InferType<BaseShape<any>>> : InferType<BaseShape<any>>;
   get(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<InferType<BaseShape<any>>> : InferType<BaseShape<any>>
+  root(this: AnyConfigJS<DriverConfig>, shape: Record<string, BaseShape<any>>): DriverAsync extends true ? Promise<Record<string, BaseShape<any>>> : Record<string, BaseShape<any>>
   del(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<boolean> : boolean;
   supported_check(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<boolean> : boolean;
   has(this: AnyConfigJS<DriverConfig>, ...shapes: BaseShape<any>[]): DriverAsync extends true ? Promise<boolean> : boolean;

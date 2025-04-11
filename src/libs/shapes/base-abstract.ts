@@ -6,6 +6,9 @@ export abstract class BaseShapeAbstract<T> {
     public _key = "_unconfigured_property";
     protected _important = false;
     protected _save_default = false;
+    protected _optional = false;
+    protected _nullable = false;
+
     protected _description?: string;
     protected _transforms: Array<(value: T) => T> = [];
     protected _refinements: Array<{
@@ -42,6 +45,21 @@ export abstract class BaseShapeAbstract<T> {
     important(): this {
         this._important = true;
         return this;
+    }
+
+    optional() {
+        this._optional = true;
+        return this as BaseShapeAbstract<T | undefined> & typeof this;
+    }
+
+    nullable() {
+        this._nullable = true;
+        return this as BaseShapeAbstract<T | null> & typeof this;
+    }
+
+    //@ts-expect-error
+    transform<U>(fn: (value: T) => U): BaseShapeAbstract<U> {
+        this._transforms.push(fn as never) as never;
     }
 
     save(): this {

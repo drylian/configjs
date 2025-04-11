@@ -86,6 +86,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
     }
 
     parse(value: unknown): ShapeObject<T> {
+        if (typeof value === "undefined" && this._optional) return undefined as never;
+        if (value === null && this._nullable) return null as never;    
         if (typeof value !== 'object' || value === null) {
             this.createError(OBJECT_ERRORS.NOT_OBJECT, value);
         }

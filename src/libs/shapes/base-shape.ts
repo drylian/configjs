@@ -1,6 +1,4 @@
 import { BaseShapeAbstract } from "./base-abstract";
-import { OptionalShape } from "./optional-shape";
-import { NullableShape } from "./nullable-shape";
 import { TransformShape } from "./transform-shape";
 import { ConfigShapeError, type ErrorCreator } from "../error";
 
@@ -21,19 +19,6 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
     });
   }
 
-  optional(): OptionalShape<T> {
-    return new OptionalShape(this);
-  }
-
-  nullable(): NullableShape<T> {
-    return new NullableShape(this);
-  }
-
-  transform<U>(fn: (value: T) => U): BaseShape<U> {
-    //@ts-expect-error ingore
-    return new TransformShape(this, fn);
-  }
-
   conf() {
     return {
       key: this._key,
@@ -41,6 +26,8 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
       type: this._type,
       default: this._default,
       description: this._description,
+      optional:this._optional,
+      nullable:this._nullable,
       important: this._important,
       save_default: this._save_default,
     };

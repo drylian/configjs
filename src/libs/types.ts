@@ -28,7 +28,7 @@ export type ConfigJSRootPaths<T> =
       : never
     : Path extends keyof T
       ? T[Path] extends Record<string, any>
-        ? { [K in keyof T[Path]]: InferType<T[Path][K]> }
+        ? { [K in keyof T[Path]]: GetValueType<T[Path], K & string>}
         : never
       : never;
 

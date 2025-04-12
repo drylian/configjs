@@ -1,5 +1,4 @@
 import { BaseShapeAbstract } from "./base-abstract";
-import { TransformShape } from "./transform-shape";
 import { ConfigShapeError, type ErrorCreator } from "../error";
 
 export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
@@ -21,31 +20,14 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
 
   conf() {
     return {
-      key: this._key,
-      prop: this._prop,
+      ...this._getConfig(),
       type: this._type,
-      default: this._default,
-      description: this._description,
-      optional:this._optional,
-      nullable:this._nullable,
-      important: this._important,
-      save_default: this._save_default,
     };
-  }
-
-  refine(
-    predicate: (value: T) => boolean,
-    message: string,
-    code = 'VALIDATION_ERROR',
-    meta?: Record<string, unknown>
-  ): this {
-    this._refinements.push({ fn: predicate, message, code, meta });
-    return this;
   }
 
   parseWithDefault(value: unknown): T {
     if (typeof value === "undefined" && typeof this._default !== "undefined") {
-      return this._applyTransforms(this._default);
+      return this._applyOperations(this._default, '') as T;
     }
     return this.parse(value);
   }
@@ -68,7 +50,8 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   parseWithPath(value: unknown, path = ''): T {
     try {
       const parsed = this.parseWithDefault(value);
-      return this._applyRefinements(parsed, path);
+      this._checkImportant(parsed);
+      return this._applyOperations(parsed, path) as T;
     } catch (error) {
       if (error instanceof ConfigShapeError) {
         throw error;
@@ -85,29 +68,5 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         }
       });
     }
-  }
-
-  _applyTransforms(value: T): T {
-    return this._transforms.reduce((val, transform) => transform(val), value);
-  }
-
-  _applyRefinements(value: T, path: string): T {
-    for (const refinement of this._refinements) {
-      if (!refinement.fn(value)) {
-        throw new ConfigShapeError({
-          code: refinement.code || 'VALIDATION_ERROR',
-          path: this._prop !== '_unconfigured_property'
-            ? `${path ? `${path}.` : ''}${this._prop}`
-            : path,
-          message: refinement.message,
-          value,
-          meta: {
-            ...this.conf(),
-            ...refinement.meta ?? {},
-          }
-        });
-      }
-    }
-    return this._applyTransforms(value);
   }
 }

@@ -60,6 +60,6 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         this.createError(RECORD_ERRORS.INVALID_PROPERTY(key), input[key]);
       }
     }
-    return this._checkImportant(result);
+    return this._checkImportant(this._applyOperations(result, this._key));
   }
 }

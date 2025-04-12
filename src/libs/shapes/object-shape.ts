@@ -123,7 +123,7 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
             }
         }
 
-        return this._checkImportant(this._applyRefinements(result, this._key));
+        return this._checkImportant(this._applyOperations(result, this._key));
     }
 
     partial(): PartialShape<this> {

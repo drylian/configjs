@@ -1,5 +1,7 @@
 // string-shape.ts
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { BaseShape } from './base-shape';
+import { ConfigShapeError } from '../error';
 
 export class StringShape extends BaseShape<string> {
   public readonly _type = "string";
@@ -19,6 +21,93 @@ export class StringShape extends BaseShape<string> {
   public _contains?: string;
   public _startsWith?: string;
   public _endsWith?: string;
+  private _cryptoSecret?: string;
+  private _cryptoAlgorithm: 'aes-256-cbc' | 'aes-256-gcm' = 'aes-256-cbc';
+  private _cryptoMarker: string = 'ENC:';
+
+  crypt(secret: string, algorithm: 'aes-256-cbc' | 'aes-256-gcm' = 'aes-256-cbc', marker: string = 'ENC:'): this {
+    if (secret.length < 32) {
+      this.createError((v, p) => ({
+        code: 'INVALID_CRYPTO_SECRET',
+        path: p || '',
+        message: 'Encryption secret must be at least 32 characters long for AES-256',
+        value: secret
+      }), secret);
+    }
+
+    this._cryptoSecret = secret;
+    this._cryptoAlgorithm = algorithm;
+    this._cryptoMarker = marker;
+
+    this.transform((value: string) => {
+      if (!this._cryptoSecret) return value;
+
+      try {
+        if (value.startsWith(this._cryptoMarker)) {
+          return this._decrypt(value.slice(this._cryptoMarker.length));
+        }
+        return this._cryptoMarker + this._encrypt(value);
+      } catch (e) {
+        this.createError((v, p) => ({
+          code: 'CRYPTO_OPERATION_FAILED',
+          path: p || '',
+          message: e instanceof Error ? e.message : 'Crypto operation failed',
+          value,
+          meta: {
+            operation: value.startsWith(this._cryptoMarker) ? 'decrypt' : 'encrypt'
+          }
+        }), value);
+      }
+    }, {});
+
+    return this;
+  }
+
+  private _encrypt(value: string): string {
+    if (!this._cryptoSecret) return value;
+
+    const iv = randomBytes(16);
+    const cipher = createCipheriv(this._cryptoAlgorithm, this._cryptoSecret, iv);
+    let encrypted = cipher.update(value, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return `${iv.toString('hex')}:${encrypted}`;
+  }
+
+  private _decrypt(encryptedValue: string): string {
+    if (!this._cryptoSecret) return encryptedValue;
+
+    const [ivHex, encryptedData] = encryptedValue.split(':');
+    if (!ivHex || !encryptedData) {
+      this.createError((v, p) => ({
+        code: 'INVALID_ENCRYPTED_FORMAT',
+        path: p || '',
+        message: 'Invalid encrypted value format',
+        value: encryptedValue,
+        meta: {
+          expectedFormat: 'IV_HEX:ENCRYPTED_DATA'
+        }
+      }), encryptedValue);
+    }
+
+    try {
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = createDecipheriv(this._cryptoAlgorithm, this._cryptoSecret, iv);
+      let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (e) {
+      this.createError((v, p) => ({
+        code: 'DECRYPTION_FAILED',
+        path: p || '',
+        message: e instanceof Error ? e.message : 'Decryption failed',
+        value: encryptedValue,
+        meta: {
+          algorithm: this._cryptoAlgorithm
+        }
+      }), encryptedValue);
+    }
+  }
+
   private _coerce = false;
 
   parse(value: unknown): string {
@@ -59,7 +148,7 @@ export class StringShape extends BaseShape<string> {
       result = result.toUpperCase();
     }
 
-    return this._checkImportant(this._applyRefinements(result, this._key));
+    return this._checkImportant(this._applyOperations(result, this._key));
   }
 
   min(length: number): this {

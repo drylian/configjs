@@ -37,6 +37,6 @@ export class EnumShape<T extends (string | number)> extends BaseShape<T> {
         value
       );
     }
-    return this._checkImportant(this._applyRefinements(value as T, this._key));
+    return this._checkImportant(this._applyOperations(value as T, this._key));
   }
 }

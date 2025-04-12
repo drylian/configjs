@@ -43,6 +43,6 @@ export class BooleanShape extends BaseShape<boolean> {
     if (typeof value !== 'boolean') {
       this.createError(BOOLEAN_ERRORS.NOT_BOOLEAN, value);
     }
-    return this._checkImportant(this._applyRefinements(value, this._key));
+    return this._checkImportant(this._applyOperations(value, this._key));
   }
 }

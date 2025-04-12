@@ -10,13 +10,22 @@ export abstract class BaseShapeAbstract<T> {
     protected _nullable = false;
 
     protected _description?: string;
-    protected _transforms: Array<(value: T) => T> = [];
-    protected _refinements: Array<{
-        fn: (value: T) => boolean;
-        message: string;
-        code?: string;
-        meta?: Record<string, unknown>;
-    }> = [];
+    protected _operations: Array<
+        | {
+            type: 'transform';
+            fn: (value: any) => any;
+            message: string;
+            code?: string;
+            meta?: Record<string, unknown>
+        }
+        | {
+            type: 'refine';
+            fn: (value: any) => boolean;
+            message: string;
+            code?: string;
+            meta?: Record<string, unknown>
+        }
+    > = [];
 
     abstract parse(value: unknown): T;
 
@@ -57,9 +66,36 @@ export abstract class BaseShapeAbstract<T> {
         return this as BaseShapeAbstract<T | null> & typeof this;
     }
 
-    //@ts-expect-error
-    transform<U>(fn: (value: T) => U): BaseShapeAbstract<U> {
-        this._transforms.push(fn as never) as never;
+    transform<U>(fn: (value: T) => U, {
+        message = "Invalid transform",
+        code = 'TRANSFORM_ERROR',
+        meta = {},
+    }): BaseShapeAbstract<U> {
+        const newShape = this._clone();
+        newShape._operations.push({
+            type: 'transform',
+            fn: fn as any,
+            message,
+            code,
+            meta
+        });
+        return newShape as unknown as BaseShapeAbstract<U>;
+    }
+
+    refine(
+        predicate: (value: T) => boolean,
+        message: string,
+        code = 'VALIDATION_ERROR',
+        meta?: Record<string, unknown>
+    ): this {
+        this._operations.push({
+            type: 'refine',
+            fn: predicate as any,
+            message,
+            code,
+            meta
+        });
+        return this;
     }
 
     save(): this {
@@ -75,5 +111,68 @@ export abstract class BaseShapeAbstract<T> {
     describe(description: string): this {
         this._description = description;
         return this;
+    }
+
+    protected _clone(): this {
+        const clone = Object.create(Object.getPrototypeOf(this));
+        Object.assign(clone, this);
+        clone._operations = [...this._operations];
+        return clone;
+    }
+
+    protected _applyOperations(value: any, path: string): any {
+        let currentValue = value;
+
+        for (const op of this._operations) {
+            if (op.type === 'transform') {
+                try {
+                    currentValue = op.fn(currentValue);
+                } catch (e) {
+                    const err = e as Error | string;
+                    throw new ConfigShapeError({
+                        code: op.code || typeof err == "object" ? (err as Error).name :'TRANSFORM_ERROR',
+                        path: this._prop !== '_unconfigured_property'
+                            ? `${path ? `${path}.` : ''}${this._prop}`
+                            : path,
+                        message: op.message ?? typeof err == "string" ? err as string : err.message,
+                        value: currentValue,
+                        meta: {
+                            ...this._getConfig(),
+                            ...op.meta ?? {},
+                        }
+                    });
+                }
+            } else if (op.type === 'refine') {
+                if (!op.fn(currentValue)) {
+                    throw new ConfigShapeError({
+                        code: op.code || 'VALIDATION_ERROR',
+                        path: this._prop !== '_unconfigured_property'
+                            ? `${path ? `${path}.` : ''}${this._prop}`
+                            : path,
+                        message: op.message,
+                        value: currentValue,
+                        meta: {
+                            ...this._getConfig(),
+                            ...op.meta ?? {},
+                        }
+                    });
+                }
+            }
+        }
+
+        return currentValue;
+    }
+
+    protected _getConfig() {
+        return {
+            key: this._key,
+            prop: this._prop,
+            default: this._default,
+            description: this._description,
+            optional: this._optional,
+            nullable: this._nullable,
+            important: this._important,
+            save_default: this._save_default,
+        };
     }
 }

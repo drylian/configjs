@@ -56,14 +56,14 @@ export abstract class BaseShapeAbstract<T> {
         return this;
     }
 
-    optional() {
+    optional():this & BaseShapeAbstract<T | undefined>  {
         this._optional = true;
-        return this as BaseShapeAbstract<T | undefined> & typeof this;
+        return this;
     }
 
-    nullable() {
+    nullable():this & BaseShapeAbstract<T | null> {
         this._nullable = true;
-        return this as BaseShapeAbstract<T | null> & typeof this;
+        return this;
     }
 
     transform<U>(fn: (value: T) => U, {

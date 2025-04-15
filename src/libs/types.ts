@@ -1,4 +1,4 @@
-import type { ConfigJS } from "../ConfigJS";
+import type { BaseShapeAbstract, ConfigJS } from "../ConfigJS";
 import type { ArrayShape } from "./shapes/array-shape";
 import type { BaseShape } from "./shapes/base-shape";
 import type { BooleanShape } from "./shapes/boolean-shape";
@@ -51,7 +51,7 @@ export type GetValueType<T, Path extends string> = Path extends `${infer Key}.${
   : never;
 
 export type AnyConfigJSNestedShapes = {
-  [key: string]: BaseShape<any> | AnyConfigJSNestedShapes;
+  [key: string]: BaseShape<any> | BaseShapeAbstract<any> | AnyConfigJSNestedShapes;
 };
 
 export type ConfigInferNestedType<T> = T extends BaseShape<infer U>

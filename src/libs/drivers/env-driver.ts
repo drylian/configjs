@@ -7,6 +7,7 @@ import { ArrayShape } from "../shapes/array-shape";
 import { BooleanShape } from "../shapes/boolean-shape";
 import type { BaseShape } from "../shapes/base-shape";
 import { BaseShapeAbstract } from "../shapes/base-abstract";
+import { getShapeDefault } from "../functions";
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
 
@@ -92,7 +93,7 @@ export const envDriver = new ConfigJSDriver({
         const conf = shape.conf();
         if (!this.driver.supported_check.bind(this)(shape)) {
             console.warn(`[EnvDriver] Unsupported shape type for key: ${shape._prop}`);
-            return conf.default;
+            return getShapeDefault(shape);
         }
 
         const contents = readEnvFile(this.config.filepath);
@@ -100,12 +101,12 @@ export const envDriver = new ConfigJSDriver({
 
         try {
             return rawValue !== undefined
-                ? convertEnvValue(shape, rawValue) ?? conf.default
-                : conf.default;
+                ? convertEnvValue(shape, rawValue) ?? getShapeDefault(shape)
+                : getShapeDefault(shape);
         } catch (err) {
             const error = err as Error;
             console.warn(`[EnvDriver] Error parsing value for ${shape._prop}: ${error.message}`);
-            return conf.default;
+            return getShapeDefault(shape);
         }
     },
 
@@ -177,12 +178,12 @@ export const envDriver = new ConfigJSDriver({
 
                 try {
                     result[key] = rawValue !== undefined
-                        ? convertEnvValue(shape_or_object, rawValue) ?? conf.default
-                        : conf.default;
+                        ? convertEnvValue(shape_or_object, rawValue) ?? getShapeDefault(shape_or_object)
+                        : getShapeDefault(shape_or_object);
                 } catch (err) {
                     const error = err as Error;
                     console.warn(`[EnvDriver] Error parsing value for ${key}: ${error.message}`);
-                    result[key] = conf.default;
+                    result[key] = getShapeDefault(shape_or_object);
                 }
             } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {
                 //@ts-expect-error recursive declaration
@@ -220,10 +221,10 @@ export const envDriver = new ConfigJSDriver({
             const contents = readEnvFile(this.config.filepath);
             const rawValue = contents[conf.prop] ?? contents[conf.key];
 
-            if (typeof rawValue == "undefined" && conf.save_default && conf.default) {
-                this.set(conf.key, conf.default)
+            if (typeof rawValue == "undefined" && conf.save_default && (conf.default || "getDefaults" in shape)) {
+                this.set(conf.key, getShapeDefault(shape))
             }
-            shape._checkImportant(rawValue ?? conf.default)
+            shape._checkImportant(rawValue ?? getShapeDefault(shape))
         });
 
         return true;

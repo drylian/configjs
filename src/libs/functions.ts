@@ -1,3 +1,4 @@
+import { BaseShapeAbstract } from "../ConfigJS";
 import { BaseShape } from "./shapes/base-shape";
 import type { ShapeDef } from "./types";
 
@@ -15,4 +16,19 @@ export const processShapes = <T extends Record<string, ShapeDef<any>>>(shapes: T
             processShapes(shapeOrShapes, fullPath);
         }
     });
+}
+export function getShapeDefault(shape: BaseShape<any> | any): any {
+    if (shape instanceof BaseShapeAbstract) {
+        if (shape._default !== undefined) {
+            return shape._default;
+        }
+        
+        if ('getDefaults' in shape && typeof shape.getDefaults === 'function') {
+            return shape.getDefaults();
+        }
+        
+        return shape._default
+    }
+    
+    return shape;
 }

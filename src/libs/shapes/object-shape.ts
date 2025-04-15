@@ -2,6 +2,8 @@ import { BaseShape } from './base-shape';
 import { type ShapeDef, type InferType } from '../types';
 import { ConfigShapeError, type ErrorCreator } from '../error';
 import { processShapes } from '../functions';
+import { ArrayShape } from './array-shape';
+import { RecordShape } from './record-shape';
 
 type ShapeObject<T extends Record<string, ShapeDef<any>>> = {
     [K in keyof T]: InferType<T[K]>;
@@ -85,6 +87,48 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         this._shape = _shape;
     }
 
+    getDefaults(): ShapeObject<T> {
+        const result: any = {
+            ...(this._default ?? {})
+        };
+        
+        for (const key in this._shape) {
+          const shape = this._shape[key] as BaseShape<any>;
+          
+          if (shape instanceof BaseShape) {
+            // Tratamento para RecordShape
+            if (shape instanceof RecordShape) {
+              result[key] = shape.getDefaults();
+            }
+            // Tratamento para ObjectShape
+            else if (shape instanceof ObjectShape) {
+              result[key] = shape.getDefaults();
+            } 
+            // Tratamento para ArrayShape
+            else if (shape instanceof ArrayShape) {
+              if (shape._shape instanceof ObjectShape) {
+                result[key] = shape._default ?? [shape._shape.getDefaults()];
+              } else if (shape._shape instanceof BaseShape) {
+                result[key] = shape._default;
+              } else {
+                result[key] = shape._default;
+              }
+            }
+            // Caso padrão para outros shapes
+            else {
+              result[key] = shape._default;
+            }
+          } 
+          // Para literais simples (não são instâncias de BaseShape)
+          else {
+            result[key] = shape;
+          }
+        }
+        
+        return result;
+      }
+    
+
     parse(value: unknown): ShapeObject<T> {
         if (typeof value === "undefined" && this._optional) return undefined as never;
         if (value === null && this._nullable) return null as never;    
@@ -95,9 +139,16 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         const result: any = {};
         const input = value as Record<string, unknown>;
 
+        const shapedef = this._default ?? {};
+        const shapeDefs = this.getDefaults();
+        const defaults = {
+            ...shapeDefs,
+            ...shapedef
+        }
+        
         for (const key in this._shape) {
             const shape = this._shape[key];
-            const object_default = this._default?.[key];
+            const object_default = defaults[key];
 
             try {
                 const value = input[key];

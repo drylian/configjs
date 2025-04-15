@@ -29,7 +29,7 @@ const ARRAY_ERRORS = {
 
 export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferType<T>>> {
   public readonly _type = "array";
-  constructor(private readonly _shape: T) {
+  constructor(public readonly _shape: T) {
     super();
   }
 

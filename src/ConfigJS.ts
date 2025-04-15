@@ -1,8 +1,8 @@
 import { processShapes } from "./libs/functions";
 import { BaseShape } from "./libs/shapes/base-shape";
 export * from "./libs/factory";
-export * from "./libs/drivers/env-driver";
 export * from "./libs/driver";
+export * from "./libs/drivers";
 export * from "./libs/error";
 export * from "./libs/types";
 export * from "./libs/shapes/array-shape";

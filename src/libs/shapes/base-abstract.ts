@@ -1,15 +1,15 @@
 import { ConfigShapeError, type ErrorCreator } from '../error';
 
 export abstract class BaseShapeAbstract<T> {
-    protected _default?: T;
+    public _default?: T;
     public _prop = "_unconfigured_property";
     public _key = "_unconfigured_property";
-    protected _important = false;
-    protected _save_default = false;
-    protected _optional = false;
-    protected _nullable = false;
+    public _important = false;
+    public _save_default = false;
+    public _optional = false;
+    public _nullable = false;
 
-    protected _description?: string;
+    public _description?: string;
     protected _operations: Array<
         | {
             type: 'transform';

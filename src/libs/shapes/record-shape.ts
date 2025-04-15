@@ -39,7 +39,37 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
     super();
   }
 
-  parse(value: unknown):Record<K, InferType<V>>  {
+  getDefaults(): Record<K, InferType<V>> {
+    const result: Record<any, any> = {
+      ...(this._default ?? {})
+    };
+
+    // Verifica se há um valor padrão definido no próprio RecordShape
+    if (typeof this._default !== 'undefined') {
+      return this._default;
+    }
+
+    let key: K;
+    key = this._keyShape._default as K;
+
+    let value: InferType<V>;
+    if (this._valueShape instanceof BaseShape) {
+      if (typeof this._valueShape._default !== 'undefined') {
+        value = this._valueShape._default;
+      } else if ('getDefaults' in this._valueShape) {
+        value = (this._valueShape as any).getDefaults();
+      } else {
+        value = {} as InferType<V>;
+      }
+    } else {
+      value = this._valueShape;
+    }
+
+    if (key) result[key] = value;
+    return result;
+  }
+
+  parse(value: unknown): Record<K, InferType<V>> {
     if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
     if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
     if (value === null || typeof value !== 'object') {

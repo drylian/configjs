@@ -1,5 +1,6 @@
 // number-shape.ts
 import type { ErrorCreator } from "../error";
+import type { COptionsConfig } from "../types";
 import { BaseShape } from "./base-shape";
 
 const createNumberError = (options: {
@@ -16,54 +17,60 @@ const createNumberError = (options: {
 };
 
 const NUMBER_ERRORS = {
-  NOT_NUMBER: createNumberError({
-    code: 'NOT_NUMBER',
-    message: 'Expected a number'
+  NOT_NUMBER: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_NUMBER',
+    message: opts?.message ?? 'Expected a number',
+    meta: opts?.meta
   }),
-  MIN_VALUE: (min: number) => createNumberError({
-    code: 'NUMBER_TOO_SMALL',
-    message: `Number must be at least ${min}`,
-    meta: { min }
+  MIN_VALUE: (min: number, opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NUMBER_TOO_SMALL',
+    message: opts?.message ?? `Number must be at least ${min}`,
+    meta: opts?.meta ?? { min }
   }),
-  MAX_VALUE: (max: number) => createNumberError({
-    code: 'NUMBER_TOO_LARGE',
-    message: `Number must be at most ${max}`,
-    meta: { max }
+  MAX_VALUE: (max: number, opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NUMBER_TOO_LARGE',
+    message: opts?.message ?? `Number must be at most ${max}`,
+    meta: opts?.meta ?? { max }
   }),
-  NOT_INTEGER: createNumberError({
-    code: 'NOT_INTEGER',
-    message: 'Number must be an integer'
+  NOT_INTEGER: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_INTEGER',
+    message: opts?.message ?? 'Number must be an integer',
+    meta: opts?.meta
   }),
-  NOT_POSITIVE: createNumberError({
-    code: 'NOT_POSITIVE',
-    message: 'Number must be positive'
+  NOT_POSITIVE: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_POSITIVE',
+    message: opts?.message ?? 'Number must be positive',
+    meta: opts?.meta
   }),
-  NOT_NEGATIVE: createNumberError({
-    code: 'NOT_NEGATIVE',
-    message: 'Number must be negative'
+  NOT_NEGATIVE: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_NEGATIVE',
+    message: opts?.message ?? 'Number must be negative',
+    meta: opts?.meta
   }),
-  NOT_SAFE_INTEGER: createNumberError({
-    code: 'NOT_SAFE_INTEGER',
-    message: 'Number must be a safe integer'
+  NOT_SAFE_INTEGER: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_SAFE_INTEGER',
+    message: opts?.message ?? 'Number must be a safe integer',
+    meta: opts?.meta
   }),
-  NOT_FINITE: createNumberError({
-    code: 'NOT_FINITE',
-    message: 'Number must be finite'
+  NOT_FINITE: (opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_FINITE',
+    message: opts?.message ?? 'Number must be finite',
+    meta: opts?.meta
   }),
-  NOT_MULTIPLE_OF: (multiple: number) => createNumberError({
-    code: 'NOT_MULTIPLE_OF',
-    message: `Number must be a multiple of ${multiple}`,
-    meta: { multiple }
+  NOT_MULTIPLE_OF: (multiple: number, opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_MULTIPLE_OF',
+    message: opts?.message ?? `Number must be a multiple of ${multiple}`,
+    meta: opts?.meta ?? { multiple }
   }),
-  NOT_IN_RANGE: (min: number, max: number) => createNumberError({
-    code: 'NOT_IN_RANGE',
-    message: `Number must be between ${min} and ${max}`,
-    meta: { min, max }
+  NOT_IN_RANGE: (min: number, max: number, opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_IN_RANGE',
+    message: opts?.message ?? `Number must be between ${min} and ${max}`,
+    meta: opts?.meta ?? { min, max }
   }),
-  NOT_EQUAL: (expected: number) => createNumberError({
-    code: 'NOT_EQUAL',
-    message: `Number must be equal to ${expected}`,
-    meta: { expected }
+  NOT_EQUAL: (expected: number, opts?: COptionsConfig) => createNumberError({
+    code: opts?.code ?? 'NOT_EQUAL',
+    message: opts?.message ?? `Number must be equal to ${expected}`,
+    meta: opts?.meta ?? { expected }
   })
 };
 
@@ -84,7 +91,8 @@ export class NumberShape extends BaseShape<number> {
     return this;
   }
 
-  parse(value: unknown): number {
+  parse(value: unknown, opts?: COptionsConfig): number {
+    if (typeof value === "undefined" && this._default) value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
     
@@ -96,17 +104,17 @@ export class NumberShape extends BaseShape<number> {
       } else if (typeof value === 'string') {
         value = Number(value);
         if (isNaN(value as number)) {
-          this.createError(NUMBER_ERRORS.NOT_NUMBER, value);
+          this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
         }
       } else if (typeof value === 'number') {
         value = value;
       } else {
-        this.createError(NUMBER_ERRORS.NOT_NUMBER, value);
+        this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
       }
     }
 
     if (typeof value !== 'number') {
-      this.createError(NUMBER_ERRORS.NOT_NUMBER, value);
+      this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
     }
 
     let result = value as number;
@@ -114,145 +122,150 @@ export class NumberShape extends BaseShape<number> {
     return this._checkImportant(this._applyOperations(result, this._key));
   }
 
-  min(value: number): this {
+  min(value: number, opts: COptionsConfig = {}): this {
     this._min = value;
     return this.refine(
       (val) => val >= value,
-      `Number must be at least ${value}`,
-      'NUMBER_TOO_SMALL',
-      { min: value }
+      opts.message ?? `Number must be at least ${value}`,
+      opts.code ?? 'NUMBER_TOO_SMALL',
+      opts.meta ?? { min: value }
     );
   }
 
-  max(value: number): this {
+  max(value: number, opts: COptionsConfig = {}): this {
     this._max = value;
     return this.refine(
       (val) => val <= value,
-      `Number must be at most ${value}`,
-      'NUMBER_TOO_LARGE',
-      { max: value }
+      opts.message ?? `Number must be at most ${value}`,
+      opts.code ?? 'NUMBER_TOO_LARGE',
+      opts.meta ?? { max: value }
     );
   }
 
-  range(min: number, max: number): this {
+  range(min: number, max: number, opts: COptionsConfig = {}): this {
     this._min = min;
     this._max = max;
     return this.refine(
       (val) => val >= min && val <= max,
-      `Number must be between ${min} and ${max}`,
-      'NOT_IN_RANGE',
-      { min, max }
+      opts.message ?? `Number must be between ${min} and ${max}`,
+      opts.code ?? 'NOT_IN_RANGE',
+      opts.meta ?? { min, max }
     );
   }
 
-  int(): this {
+  int(opts: COptionsConfig = {}): this {
     this._int = true;
     return this.refine(
       Number.isInteger,
-      'Number must be an integer',
-      'NOT_INTEGER'
+      opts.message ?? 'Number must be an integer',
+      opts.code ?? 'NOT_INTEGER',
+      opts.meta
     );
   }
 
-  positive(): this {
+  positive(opts: COptionsConfig = {}): this {
     this._positive = true;
     return this.refine(
       (val) => val > 0,
-      'Number must be positive',
-      'NOT_POSITIVE'
+      opts.message ?? 'Number must be positive',
+      opts.code ?? 'NOT_POSITIVE',
+      opts.meta
     );
   }
 
-  nonNegative(): this {
-    return this.min(0);
+  nonNegative(opts: COptionsConfig = {}): this {
+    return this.min(0, opts);
   }
 
-  negative(): this {
+  negative(opts: COptionsConfig = {}): this {
     this._negative = true;
     return this.refine(
       (val) => val < 0,
-      'Number must be negative',
-      'NOT_NEGATIVE'
+      opts.message ?? 'Number must be negative',
+      opts.code ?? 'NOT_NEGATIVE',
+      opts.meta
     );
   }
 
-  nonPositive(): this {
-    return this.max(0);
+  nonPositive(opts: COptionsConfig = {}): this {
+    return this.max(0, opts);
   }
 
-  finite(): this {
+  finite(opts: COptionsConfig = {}): this {
     this._finite = true;
     return this.refine(
       Number.isFinite,
-      'Number must be finite',
-      'NOT_FINITE'
+      opts.message ?? 'Number must be finite',
+      opts.code ?? 'NOT_FINITE',
+      opts.meta
     );
   }
 
-  safe(): this {
+  safe(opts: COptionsConfig = {}): this {
     this._safe = true;
     return this.refine(
       Number.isSafeInteger,
-      'Number must be a safe integer',
-      'NOT_SAFE_INTEGER'
+      opts.message ?? 'Number must be a safe integer',
+      opts.code ?? 'NOT_SAFE_INTEGER',
+      opts.meta
     );
   }
 
-  multipleOf(value: number): this {
+  multipleOf(value: number, opts: COptionsConfig = {}): this {
     this._multipleOf = value;
     return this.refine(
       (val) => val % value === 0,
-      `Number must be a multiple of ${value}`,
-      'NOT_MULTIPLE_OF',
-      { multiple: value }
+      opts.message ?? `Number must be a multiple of ${value}`,
+      opts.code ?? 'NOT_MULTIPLE_OF',
+      opts.meta ?? { multiple: value }
     );
   }
 
-  equals(value: number): this {
+  equals(value: number, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => val === value,
-      `Number must be equal to ${value}`,
-      'NOT_EQUAL',
-      { expected: value }
+      opts.message ?? `Number must be equal to ${value}`,
+      opts.code ?? 'NOT_EQUAL',
+      opts.meta ?? { expected: value }
     );
   }
 
-  notEquals(value: number): this {
+  notEquals(value: number, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => val !== value,
-      `Number must not be equal to ${value}`,
-      'EQUALS_FORBIDDEN_VALUE',
-      { forbidden: value }
+      opts.message ?? `Number must not be equal to ${value}`,
+      opts.code ?? 'EQUALS_FORBIDDEN_VALUE',
+      opts.meta ?? { forbidden: value }
     );
   }
 
-  oneOf(values: number[]): this {
+  oneOf(values: number[], opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => values.includes(val),
-      `Number must be one of: ${values.join(', ')}`,
-      'NOT_IN_VALUES',
-      { options: values }
+      opts.message ?? `Number must be one of: ${values.join(', ')}`,
+      opts.code ?? 'NOT_IN_VALUES',
+      opts.meta ?? { options: values }
     );
   }
 
-  notOneOf(values: number[]): this {
+  notOneOf(values: number[], opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => !values.includes(val),
-      `Number must not be one of: ${values.join(', ')}`,
-      'IN_FORBIDDEN_VALUES',
-      { forbidden: values }
+      opts.message ?? `Number must not be one of: ${values.join(', ')}`,
+      opts.code ?? 'IN_FORBIDDEN_VALUES',
+      opts.meta ?? { forbidden: values }
     );
   }
 
-  port(): this {
-    return this.int().min(0).max(65535);
+  port(opts: COptionsConfig = {}): this {
+    return this.int(opts).min(0, opts).max(65535, opts);
   }
 
-  latitude(): this {
-    return this.min(-90).max(90);
+  latitude(opts: COptionsConfig = {}): this {
+    return this.min(-90, opts).max(90, opts);
   }
 
-  longitude(): this {
-    return this.min(-180).max(180);
+  longitude(opts: COptionsConfig = {}): this {
+    return this.min(-180, opts).max(180, opts);
   }
 }

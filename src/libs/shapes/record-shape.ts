@@ -1,6 +1,6 @@
 // record-shape.ts
 import { BaseShape } from './base-shape';
-import { type InferType } from '../types';
+import { type COptionsConfig, type InferType } from '../types';
 import { ConfigShapeError, type ErrorCreator } from '../error';
 
 const createRecordError = (options: {
@@ -17,14 +17,15 @@ const createRecordError = (options: {
 };
 
 const RECORD_ERRORS = {
-  NOT_OBJECT: createRecordError({
-    code: 'NOT_OBJECT',
-    message: 'Expected an object'
+  NOT_OBJECT: (opts?: COptionsConfig) => createRecordError({
+    code: opts?.code ?? 'NOT_OBJECT',
+    message: opts?.message ?? 'Expected an object',
+    meta: opts?.meta
   }),
-  INVALID_PROPERTY: (key: string) => createRecordError({
-    code: 'INVALID_PROPERTY',
-    message: `Invalid property "${key}"`,
-    meta: { property: key }
+  INVALID_PROPERTY: (key: string, opts?: COptionsConfig) => createRecordError({
+    code: opts?.code ?? 'INVALID_PROPERTY',
+    message: opts?.message ?? `Invalid property "${key}"`,
+    meta: opts?.meta ?? { property: key }
   })
 };
 
@@ -69,11 +70,11 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
     return result;
   }
 
-  parse(value: unknown): Record<K, InferType<V>> {
+  parse(value: unknown, opts?: COptionsConfig): Record<K, InferType<V>> {
     if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
     if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
     if (value === null || typeof value !== 'object') {
-      this.createError(RECORD_ERRORS.NOT_OBJECT, value);
+      this.createError(RECORD_ERRORS.NOT_OBJECT(opts), value);
     }
 
     const result: Record<any, any> = {};
@@ -87,9 +88,54 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         if (error instanceof ConfigShapeError) {
           throw error;
         }
-        this.createError(RECORD_ERRORS.INVALID_PROPERTY(key), input[key]);
+        this.createError(RECORD_ERRORS.INVALID_PROPERTY(key, opts), input[key]);
       }
     }
     return this._checkImportant(this._applyOperations(result, this._key));
+  }
+
+  minProperties(min: number, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => Object.keys(val).length >= min,
+      opts.message ?? `Record must have at least ${min} properties`,
+      opts.code ?? 'TOO_FEW_PROPERTIES',
+      opts.meta ?? { min }
+    );
+  }
+
+  maxProperties(max: number, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => Object.keys(val).length <= max,
+      opts.message ?? `Record must have at most ${max} properties`,
+      opts.code ?? 'TOO_MANY_PROPERTIES',
+      opts.meta ?? { max }
+    );
+  }
+
+  exactProperties(count: number, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => Object.keys(val).length === count,
+      opts.message ?? `Record must have exactly ${count} properties`,
+      opts.code ?? 'INVALID_PROPERTY_COUNT',
+      opts.meta ?? { count }
+    );
+  }
+
+  hasProperty(key: K, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => key in val,
+      opts.message ?? `Record must have property "${String(key)}"`,
+      opts.code ?? 'MISSING_PROPERTY',
+      opts.meta ?? { property: key }
+    );
+  }
+
+  forbiddenProperty(key: K, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => !(key in val),
+      opts.message ?? `Record must not have property "${String(key)}"`,
+      opts.code ?? 'FORBIDDEN_PROPERTY',
+      opts.meta ?? { property: key }
+    );
   }
 }

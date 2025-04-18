@@ -2,6 +2,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { BaseShape } from './base-shape';
 import { ConfigShapeError } from '../error';
+import type { COptionsConfig } from '../types';
 
 export class StringShape extends BaseShape<string> {
   public readonly _type = "string";
@@ -111,6 +112,7 @@ export class StringShape extends BaseShape<string> {
   private _coerce = false;
 
   parse(value: unknown): string {
+    if (typeof value === "undefined" && this._default) value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
     
@@ -151,36 +153,36 @@ export class StringShape extends BaseShape<string> {
     return this._checkImportant(this._applyOperations(result, this._key));
   }
 
-  min(length: number): this {
+  min(length: number, opts: COptionsConfig = {}): this {
     this._min = length;
     return this.refine(
       (val) => val.length >= length,
-      `String must be at least ${length} characters long`,
-      'STRING_TOO_SHORT',
-      {
+      opts.message ?? `String must be at least ${length} characters long`,
+      opts.code ?? 'STRING_TOO_SHORT',
+      opts.meta ?? {
         min: length
       }
     );
   }
 
-  max(length: number): this {
+  max(length: number, opts: COptionsConfig = {}): this {
     this._max = length;
     return this.refine(
       (val) => val.length <= length,
-      `String must be at most ${length} characters long`,
-      'STRING_TOO_LONG',
-      {
+      opts.message ?? `String must be at most ${length} characters long`,
+      opts.code ?? 'STRING_TOO_LONG',
+      opts.meta ?? {
         max: length
       }
     );
   }
 
-  length(length: number): this {
+  length(length: number, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => val.length === length,
-      `String must be exactly ${length} characters long`,
-      'STRING_LENGTH_MISMATCH',
-      {
+      opts.message ?? `String must be exactly ${length} characters long`,
+      opts.code ?? 'STRING_LENGTH_MISMATCH',
+      opts.meta ?? {
         length
       }
     );
@@ -191,27 +193,28 @@ export class StringShape extends BaseShape<string> {
     return this;
   }
 
-  regex(pattern: RegExp): this {
+  regex(pattern: RegExp, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => pattern.test(val),
-      `String must match pattern ${pattern}`,
-      'REGEX_MISMATCH',
-      {
+      opts.message ?? `String must match pattern ${pattern}`,
+      opts.code ?? 'REGEX_MISMATCH',
+      opts.meta ?? {
         regex: pattern.source
       }
     );
   }
 
-  email(): this {
+  email(opts: COptionsConfig = {}): this {
     this._email = true;
     return this.refine(
       (val) => /^[a-zA-Z0-9.!#$%&'*+\=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/.test(val),
-      `Email is invalid`,
-      'INVALID_EMAIL'
+      opts.message ?? `Email is invalid`,
+      opts.code ?? 'INVALID_EMAIL',
+      opts.meta
     );
   }
 
-  url(): this {
+  url(opts: COptionsConfig = {}): this {
     this._url = true;
     return this.refine(
       (val) => {
@@ -222,21 +225,23 @@ export class StringShape extends BaseShape<string> {
           return false;
         }
       },
-      `URL is invalid`,
-      'INVALID_URL'
+      opts.message ?? `URL is invalid`,
+      opts.code ?? 'INVALID_URL',
+      opts.meta
     );
   }
 
-  uuid(): this {
+  uuid(opts: COptionsConfig = {}): this {
     this._uuid = true;
     return this.refine(
       (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val),
-      `UUID is invalid`,
-      'INVALID_UUID'
+      opts.message ?? `UUID is invalid`,
+      opts.code ?? 'INVALID_UUID',
+      opts.meta
     );
   }
 
-  creditCard(): this {
+  creditCard(opts: COptionsConfig = {}): this {
     this._creditCard = true;
     return this.refine(
       (val) => {
@@ -255,21 +260,23 @@ export class StringShape extends BaseShape<string> {
         }
         return sum % 10 === 0;
       },
-      `Credit card number is invalid`,
-      'INVALID_CREDIT_CARD'
+      opts.message ?? `Credit card number is invalid`,
+      opts.code ?? 'INVALID_CREDIT_CARD',
+      opts.meta
     );
   }
 
-  hexColor(): this {
+  hexColor(opts: COptionsConfig = {}): this {
     this._hexColor = true;
     return this.refine(
       (val) => /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(val),
-      `Hex color is invalid`,
-      'INVALID_HEX_COLOR'
+      opts.message ?? `Hex color is invalid`,
+      opts.code ?? 'INVALID_HEX_COLOR',
+      opts.meta
     );
   }
 
-  ipAddress(): this {
+  ipAddress(opts: COptionsConfig = {}): this {
     this._ipAddress = true;
     return this.refine(
       (val) => {
@@ -277,17 +284,19 @@ export class StringShape extends BaseShape<string> {
         return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(val) || 
                /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/.test(val);
       },
-      `IP address is invalid`,
-      'INVALID_IP_ADDRESS'
+      opts.message ?? `IP address is invalid`,
+      opts.code ?? 'INVALID_IP_ADDRESS',
+      opts.meta
     );
   }
 
-  isoDate(): this {
+  isoDate(opts: COptionsConfig = {}): this {
     this._isoDate = true;
     return this.refine(
       (val) => !isNaN(Date.parse(val)) && new Date(val).toISOString() === val,
-      `Date must be in ISO format`,
-      'INVALID_ISO_DATE'
+      opts.message ?? `Date must be in ISO format`,
+      opts.code ?? 'INVALID_ISO_DATE',
+      opts.meta
     );
   }
 
@@ -306,86 +315,98 @@ export class StringShape extends BaseShape<string> {
     return this;
   }
 
-  alphanumeric(): this {
+  alphanumeric(opts: COptionsConfig = {}): this {
     this._alphanumeric = true;
     return this.refine(
       (val) => /^[a-zA-Z0-9]+$/.test(val),
-      `String must contain only alphanumeric characters`,
-      'INVALID_ALPHANUMERIC'
+      opts.message ?? `String must contain only alphanumeric characters`,
+      opts.code ?? 'INVALID_ALPHANUMERIC',
+      opts.meta
     );
   }
 
-  contains(substring: string): this {
+  contains(substring: string, opts: COptionsConfig = {}): this {
     this._contains = substring;
     return this.refine(
       (val) => val.includes(substring),
-      `String must contain "${substring}"`,
-      'MISSING_SUBSTRING'
+      opts.message ?? `String must contain "${substring}"`,
+      opts.code ?? 'MISSING_SUBSTRING',
+      opts.meta
     );
   }
 
-  startsWith(prefix: string): this {
+  startsWith(prefix: string, opts: COptionsConfig = {}): this {
     this._startsWith = prefix;
     return this.refine(
       (val) => val.startsWith(prefix),
-      `String must start with "${prefix}"`,
-      'MISSING_PREFIX'
+      opts.message ?? `String must start with "${prefix}"`,
+      opts.code ?? 'MISSING_PREFIX',
+      opts.meta
     );
   }
 
-  endsWith(suffix: string): this {
+  endsWith(suffix: string, opts: COptionsConfig = {}): this {
     this._endsWith = suffix;
     return this.refine(
       (val) => val.endsWith(suffix),
-      `String must end with "${suffix}"`,
-      'MISSING_SUFFIX'
+      opts.message ?? `String must end with "${suffix}"`,
+      opts.code ?? 'MISSING_SUFFIX',
+      opts.meta
     );
   }
 
-  oneOf(options: string[]): this {
+  includes(substring: string, opts: COptionsConfig = {}): this {
+    return this.contains(substring, opts);
+  }
+
+  oneOf(options: string[], opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => options.includes(val),
-      `String must be one of: ${options.join(', ')}`,
-      'VALUE_NOT_IN_OPTIONS',
-      {
+      opts.message ?? `String must be one of: ${options.join(', ')}`,
+      opts.code ?? 'VALUE_NOT_IN_OPTIONS',
+      opts.meta ?? {
         options
       }
     );
   }
 
-  notEmpty(): this {
+  notEmpty(opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => val.length > 0,
-      `String must not be empty`,
-      'EMPTY_STRING'
+      opts.message ?? `String must not be empty`,
+      opts.code ?? 'EMPTY_STRING',
+      opts.meta
     );
   }
 
-  asNumber(): this {
+  asNumber(opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => !isNaN(parseFloat(val)),
-      `String must represent a valid number`,
-      'INVALID_NUMBER_STRING'
+      opts.message ?? `String must represent a valid number`,
+      opts.code ?? 'INVALID_NUMBER_STRING',
+      opts.meta
     );
   }
 
-  asInteger(): this {
+  asInteger(opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => /^-?\d+$/.test(val),
-      `String must represent a valid integer`,
-      'INVALID_INTEGER_STRING'
+      opts.message ?? `String must represent a valid integer`,
+      opts.code ?? 'INVALID_INTEGER_STRING',
+      opts.meta
     );
   }
 
-  asBoolean(): this {
+  asBoolean(opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => ['true', 'false', '1', '0'].includes(val.toLowerCase()),
-      `String must represent a boolean (true/false/1/0)`,
-      'INVALID_BOOLEAN_STRING'
+      opts.message ?? `String must represent a boolean (true/false/1/0)`,
+      opts.code ?? 'INVALID_BOOLEAN_STRING',
+      opts.meta
     );
   }
 
-  asJson(): this {
+  asJson(opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => {
         try {
@@ -395,8 +416,9 @@ export class StringShape extends BaseShape<string> {
           return false;
         }
       },
-      `String must be valid JSON`,
-      'INVALID_JSON'
+      opts.message ?? `String must be valid JSON`,
+      opts.code ?? 'INVALID_JSON',
+      opts.meta
     );
   }
 }

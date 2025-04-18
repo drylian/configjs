@@ -1,5 +1,5 @@
 import { BaseShape } from './base-shape';
-import { type ShapeDef, type InferType } from '../types';
+import { type ShapeDef, type InferType, type COptionsConfig } from '../types';
 import { ConfigShapeError, type ErrorCreator } from '../error';
 import { processShapes } from '../functions';
 import { ArrayShape } from './array-shape';
@@ -23,14 +23,15 @@ const createObjectError = (options: {
 };
 
 const OBJECT_ERRORS = {
-    NOT_OBJECT: createObjectError({
-        code: 'NOT_OBJECT',
-        message: 'Expected an object'
+    NOT_OBJECT: (opts?: COptionsConfig) => createObjectError({
+        code: opts?.code ?? 'NOT_OBJECT',
+        message: opts?.message ?? 'Expected an object',
+        meta: opts?.meta
     }),
-    INVALID_PROPERTY: (key: string) => createObjectError({
-        code: 'INVALID_PROPERTY',
-        message: `Invalid property "${key}"`,
-        meta: { property: key }
+    INVALID_PROPERTY: (key: string, opts?: COptionsConfig) => createObjectError({
+        code: opts?.code ?? 'INVALID_PROPERTY',
+        message: opts?.message ?? `Invalid property "${key}"`,
+        meta: opts?.meta ?? { property: key }
     })
 };
 
@@ -41,10 +42,9 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
         super();
     }
 
-    parse(value: unknown): Partial<InferType<T>> {
-
+    parse(value: unknown, opts?: COptionsConfig): Partial<InferType<T>> {
         if (value === null || typeof value !== 'object') {
-            this.createError(OBJECT_ERRORS.NOT_OBJECT, value);
+            this.createError(OBJECT_ERRORS.NOT_OBJECT(opts), value);
         }
 
         const result: any = {};
@@ -61,7 +61,7 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
                         if (error instanceof ConfigShapeError) {
                             throw error;
                         }
-                        this.createError(OBJECT_ERRORS.INVALID_PROPERTY(key), input[key]);
+                        this.createError(OBJECT_ERRORS.INVALID_PROPERTY(key, opts), input[key]);
                     }
                 }
             }
@@ -70,7 +70,8 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
                 code: 'INVALID_PARTIAL_SHAPE',
                 path: this._prop,
                 message: 'PartialShape can only be used with ObjectShape',
-                value
+                value,
+                ...opts
             });
         }
 
@@ -126,14 +127,14 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         }
         
         return result;
-      }
+    }
     
 
-    parse(value: unknown): ShapeObject<T> {
+    parse(value: unknown, opts?: COptionsConfig): ShapeObject<T> {
         if (typeof value === "undefined" && this._optional) return undefined as never;
         if (value === null && this._nullable) return null as never;    
         if (typeof value !== 'object' || value === null) {
-            this.createError(OBJECT_ERRORS.NOT_OBJECT, value);
+            this.createError(OBJECT_ERRORS.NOT_OBJECT(opts), value);
         }
 
         const result: any = {};
@@ -161,7 +162,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
                         code: 'INVALID_LITERAL',
                         path: `${key}`,
                         message: `Expected ${JSON.stringify(shape)}`,
-                        value
+                        value,
+                        ...opts
                     });
                 } else {
                     result[key] = shape ?? object_default;
@@ -170,7 +172,7 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
                 if (error instanceof ConfigShapeError) {
                     throw error;
                 }
-                this.createError(OBJECT_ERRORS.INVALID_PROPERTY(key), input[key]);
+                this.createError(OBJECT_ERRORS.INVALID_PROPERTY(key, opts), input[key]);
             }
         }
 
@@ -194,5 +196,50 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
             ...this._shape,
             ...shape._shape
         }) as ObjectShape<T & U>;
+    }
+
+    hasProperty<K extends keyof T>(key: K, opts: COptionsConfig = {}): this {
+        return this.refine(
+            (val) => key in val,
+            opts.message ?? `Object must have property "${String(key)}"`,
+            opts.code ?? 'MISSING_PROPERTY',
+            opts.meta ?? { property: key }
+        );
+    }
+
+    forbiddenProperty<K extends keyof T>(key: K, opts: COptionsConfig = {}): this {
+        return this.refine(
+            (val) => !(key in val),
+            opts.message ?? `Object must not have property "${String(key)}"`,
+            opts.code ?? 'FORBIDDEN_PROPERTY',
+            opts.meta ?? { property: key }
+        );
+    }
+
+    exactProperties(count: number, opts: COptionsConfig = {}): this {
+        return this.refine(
+            (val) => Object.keys(val).length === count,
+            opts.message ?? `Object must have exactly ${count} properties`,
+            opts.code ?? 'INVALID_PROPERTY_COUNT',
+            opts.meta ?? { count }
+        );
+    }
+
+    minProperties(min: number, opts: COptionsConfig = {}): this {
+        return this.refine(
+            (val) => Object.keys(val).length >= min,
+            opts.message ?? `Object must have at least ${min} properties`,
+            opts.code ?? 'TOO_FEW_PROPERTIES',
+            opts.meta ?? { min }
+        );
+    }
+
+    maxProperties(max: number, opts: COptionsConfig = {}): this {
+        return this.refine(
+            (val) => Object.keys(val).length <= max,
+            opts.message ?? `Object must have at most ${max} properties`,
+            opts.code ?? 'TOO_MANY_PROPERTIES',
+            opts.meta ?? { max }
+        );
     }
 }

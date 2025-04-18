@@ -1,8 +1,6 @@
 import { processShapes } from "./libs/functions";
 import { BaseShape } from "./libs/shapes/base-shape";
 export * from "./libs/factory";
-export * from "./libs/driver";
-export * from "./libs/drivers";
 export * from "./libs/error";
 export * from "./libs/types";
 export * from "./libs/shapes/array-shape";
@@ -14,6 +12,8 @@ export * from "./libs/shapes/number-shape";
 export * from "./libs/shapes/object-shape";
 export * from "./libs/shapes/record-shape";
 export * from "./libs/shapes/string-shape";
+export * from "./libs/driver";
+export * from "./libs/drivers";
 import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult } from "./libs/types";
 
 export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, Shapes extends AnyConfigJSNestedShapes> {

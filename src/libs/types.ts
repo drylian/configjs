@@ -7,6 +7,7 @@ import type { ObjectShape, PartialShape } from "./shapes/object-shape";
 import type { RecordShape } from "./shapes/record-shape";
 import type { StringShape } from "./shapes/string-shape";
 
+export type COptionsConfig = { code?: string, message?: string, meta?: Record<string, unknown> };
 export type ConfigJSRootPaths<T> =
   T extends BaseShape<any>
   ? never
@@ -21,16 +22,30 @@ export type ConfigJSRootPaths<T> =
   }[keyof T & string]
   : never;
 
-  export type RecursiveConfigJSResult<T, Path extends string> =
+  export type GetConfigType<T> = {
+    [K in keyof T as 
+      K extends `_${infer P}`
+        ? T[K] extends (...args: any[]) => any 
+          ? never 
+          : P
+        : K extends string
+          ? T[K] extends (...args: any[]) => any 
+            ? never 
+            : K
+          : never
+    ]: T[K]
+  };
+
+export type RecursiveConfigJSResult<T, Path extends string> =
   Path extends `${infer Key}.${infer Rest}`
-    ? Key extends keyof T
-      ? RecursiveConfigJSResult<T[Key], Rest>
-      : never
-    : Path extends keyof T
-      ? T[Path] extends Record<string, any>
-        ? { [K in keyof T[Path]]: GetValueType<T[Path], K & string>}
-        : never
-      : never;
+  ? Key extends keyof T
+  ? RecursiveConfigJSResult<T[Key], Rest>
+  : never
+  : Path extends keyof T
+  ? T[Path] extends Record<string, any>
+  ? { [K in keyof T[Path]]: GetValueType<T[Path], K & string> }
+  : never
+  : never;
 
 export type ConfigJSPaths<T> = T extends BaseShape<any>
   ? never

@@ -1,19 +1,23 @@
 import { BaseShapeAbstract } from "./base-abstract";
 import { ConfigShapeError, type ErrorCreator } from "../error";
+import type { COptionsConfig } from "../types";
 
 export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   abstract readonly _type: string;
 
-  protected createError(creator: ErrorCreator, value: unknown, path = ''): never {
+  protected createError(creator: ErrorCreator, value: unknown, path = '', opts?: COptionsConfig): never {
     const fullPath = this._prop !== '_unconfigured_property'
       ? `${path ? `${path}.` : ''}${this._prop}`
       : path;
     const data = creator(value, fullPath);
     throw new ConfigShapeError({
       ...data,
+      code: opts?.code ?? data.code,
+      message: opts?.message ?? data.message,
       meta: {
         ...this.conf(),
-        ...data.meta ?? {}
+        ...data.meta ?? {},
+        ...opts?.meta ?? {}
       }
     });
   }
@@ -40,7 +44,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         message: `The property '${this._prop}' is marked as required but was not provided. Please define this value before proceeding.`,
         value,
         meta: {
-          ...this.conf()
+          ...this.conf(),
         }
       });
     }
@@ -61,10 +65,10 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         path: this._prop !== '_unconfigured_property'
           ? `${path ? `${path}.` : ''}${this._prop}`
           : path,
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: (error instanceof Error ? error.message : 'Unknown error'),
         value,
         meta: {
-          ...this.conf()
+          ...this.conf(),
         }
       });
     }

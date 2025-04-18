@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
+import { BaseShapeAbstract } from '../shapes/base-abstract';
+import { getShapeDefault } from '../functions';
 import { StringShape } from '../shapes/string-shape';
 import { NumberShape } from '../shapes/number-shape';
 import { EnumShape } from '../shapes/enum-shape';
@@ -7,8 +9,6 @@ import { ArrayShape } from '../shapes/array-shape';
 import { BooleanShape } from '../shapes/boolean-shape';
 import { RecordShape } from '../shapes/record-shape';
 import { ObjectShape } from '../shapes/object-shape';
-import { BaseShapeAbstract } from '../shapes/base-abstract';
-import { getShapeDefault } from '../functions';
 
 const readJsonFile = (path: string): Record<string, any> => {
     if (!fs.existsSync(path)) return {};

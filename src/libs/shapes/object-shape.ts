@@ -179,7 +179,7 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         return this._checkImportant(this._applyOperations(result, this._key));
     }
 
-    partial(): PartialShape<this> {
+    partial() {
         if (!(this instanceof ObjectShape)) {
             throw new ConfigShapeError({
                 code: 'INVALID_PARTIAL_CALL',

@@ -9,6 +9,18 @@ import { ArrayShape } from '../shapes/array-shape';
 import { BooleanShape } from '../shapes/boolean-shape';
 import { RecordShape } from '../shapes/record-shape';
 import { ObjectShape } from '../shapes/object-shape';
+import { BaseShape, type ConfigJS, type InferType } from '../../ConfigJS';
+
+const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, any>) => {
+    const cached_at = Number(instance.cached_at.toString());
+    setTimeout(() => {
+        if (save) {
+            writeJsonFile(path, save);
+        }
+        if (instance.cached_at !== cached_at) return;
+        instance.cached = undefined;
+    }, delay);
+}
 
 const readJsonFile = (path: string): Record<string, any> => {
     if (!fs.existsSync(path)) return {};
@@ -21,9 +33,10 @@ const readJsonFile = (path: string): Record<string, any> => {
     }
 };
 
-const writeJsonFile = (path: string, data: Record<string, any>) => {
+const writeJsonFile = (path: string, data: Record<string, any>, pretty = false) => {
     try {
-        const content = JSON.stringify(data, null, 2);
+        const contents = readJsonFile(path);
+        const content = JSON.stringify({ ...contents, ...data }, null, pretty ? 3 : 0);
         fs.writeFileSync(path, content, "utf8");
     } catch (error) {
         console.error(`[JSONDriver] Error writing JSON file ${path}:`, error);
@@ -46,7 +59,15 @@ export const jsonDriver = new ConfigJSDriver({
         /**
          * Whether to pretty-print the JSON file
          */
-        pretty: true
+        pretty: true,
+        /**
+         * When reading the env or saving it using the config,
+         * the driver caches the env information for milliseconds,
+         * so as not to need to reread/save it several times in
+         * a few milliseconds of time.
+         * @default 100
+         */
+        delay: 100,
     },
 
     get(shape) {
@@ -56,7 +77,9 @@ export const jsonDriver = new ConfigJSDriver({
             return conf.default;
         }
 
-        const contents = readJsonFile(this.config.filepath);
+        const contents = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+        if (!this.cached) this.cached = contents;
+        fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
         const rawValue = contents[conf.prop] ?? contents[conf.key];
 
         try {
@@ -80,11 +103,12 @@ export const jsonDriver = new ConfigJSDriver({
             console.warn(`[JSONDriver] Unsupported shape type for key: ${shape._prop}`);
             return newValue;
         }
+        const contents = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+        if (!this.cached) this.cached = contents;
 
         try {
-            const contents = readJsonFile(this.config.filepath);
-            contents[shape._prop] = newValue;
-            writeJsonFile(this.config.filepath, contents);
+            this.cached[shape._prop] = newValue;
+            fileDelay(this.driver.config.filepath, this, this.driver.config.delay, { [shape._prop]: newValue });
             return newValue;
         } catch (error) {
             console.error(`[JSONDriver] Error setting value for "${shape._prop}" (key:${shape._key}):`, error);
@@ -93,15 +117,21 @@ export const jsonDriver = new ConfigJSDriver({
     },
 
     del(shape) {
-        const contents = readJsonFile(this.config.filepath);
+        const contents = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+        if (!this.cached) this.cached = contents;
+        fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
         delete contents[shape._prop];
         delete contents[shape._key];
+        delete this.cached[shape._prop];
+        delete this.cached[shape._key];
         writeJsonFile(this.config.filepath, contents);
         return true;
     },
 
     has(shape) {
-        const contents = readJsonFile(this.config.filepath);
+        const contents = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+        if (!this.cached) this.cached = contents;
+        fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
         return shape._prop in contents || shape._key in contents;
     },
 
@@ -109,9 +139,51 @@ export const jsonDriver = new ConfigJSDriver({
         return true;
     },
 
+    //@ts-expect-error additional contents in respo
+    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferType<BaseShape<any>>>, updates: Record<string, any>) {
+        if (!values || typeof values !== 'object') {
+            console.warn('[JSONDriver] Insert requires an object of values');
+            return false;
+        }
+
+        try {
+            if (!updates) updates = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+            if (!this.cached) this.cached = updates;
+            for (const key in values) {
+                const shape = object_shape[key];
+
+                if (!shape || !(shape instanceof BaseShape)) {
+                    console.warn(`[JSONDriver] No shape found for key: ${key}`);
+                    continue;
+                }
+                if (!this.driver.supported_check.bind(this)(shape)) {
+                    console.warn(`[JSONDriver] Unsupported shape type for key: ${key}`);
+                    continue;
+                }
+
+                const config = shape.conf();
+
+                try {
+                    updates[config.prop] = shape.parse(values[key]);
+                } catch (err) {
+                    const error = err as Error;
+                    console.warn(`[JSONDriver] Error parsing value for ${key}(${config.prop}): ${error.message}`);
+                    continue;
+                }
+            }
+
+            fileDelay(this.driver.config.filepath, this, this.driver.config.delay, updates);
+            return true;
+        } catch (error) {
+            console.error('[JSONDriver] Error in insert operation:', error);
+            return false;
+        }
+    },
+
     root(object_shape, contented?: Record<string, any>) {
         const result: any = {};
-        const contents = typeof contented !== "undefined" ? contented : readJsonFile(this.config.filepath);
+        if (!contented) contented = Object(this.cached || readJsonFile(this.config.filepath)) as Record<string, any>;
+        if (!this.cached) this.cached = contented;
 
         for (const key in object_shape) {
             const shape_or_object = object_shape[key];
@@ -123,7 +195,7 @@ export const jsonDriver = new ConfigJSDriver({
                 }
 
                 const conf = shape_or_object.conf();
-                const rawValue = contents[conf.prop] ?? contents[conf.key];
+                const rawValue = contented[conf.prop] ?? contented[conf.key];
 
                 try {
                     result[key] = rawValue !== undefined
@@ -136,12 +208,12 @@ export const jsonDriver = new ConfigJSDriver({
                 }
             } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {
                 //@ts-expect-error recursive declaration
-                result[key] = this.driver.root.bind(this)(shape_or_object, contents);
+                result[key] = this.driver.root.bind(this)(shape_or_object, contented);
             } else {
                 result[key] = shape_or_object;
             }
         }
-
+        fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
         return result;
     },
 

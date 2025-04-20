@@ -1,4 +1,4 @@
-import type { BaseShapeAbstract, ConfigJS } from "../ConfigJS";
+import type { BaseShapeAbstract, ConfigJS, EnumShape } from "../ConfigJS";
 import type { ArrayShape } from "./shapes/array-shape";
 import type { BaseShape } from "./shapes/base-shape";
 import type { BooleanShape } from "./shapes/boolean-shape";
@@ -22,19 +22,19 @@ export type ConfigJSRootPaths<T> =
   }[keyof T & string]
   : never;
 
-  export type GetConfigType<T> = {
-    [K in keyof T as 
-      K extends `_${infer P}`
-        ? T[K] extends (...args: any[]) => any 
-          ? never 
-          : P
-        : K extends string
-          ? T[K] extends (...args: any[]) => any 
-            ? never 
-            : K
-          : never
-    ]: T[K]
-  };
+export type GetConfigType<T> = {
+  [K in keyof T as
+  K extends `_${infer P}`
+  ? T[K] extends (...args: any[]) => any
+  ? never
+  : P
+  : K extends string
+  ? T[K] extends (...args: any[]) => any
+  ? never
+  : K
+  : never
+  ]: T[K]
+};
 
 export type RecursiveConfigJSResult<T, Path extends string> =
   Path extends `${infer Key}.${infer Rest}`
@@ -47,24 +47,30 @@ export type RecursiveConfigJSResult<T, Path extends string> =
   : never
   : never;
 
-export type ConfigJSPaths<T> = T extends BaseShape<any>
+export type ConfigJSPaths<T> =
+  T extends BaseShape<any> | BaseShapeAbstract<any>
   ? never
   : T extends object
   ? {
-    [K in keyof T & string]: T[K] extends BaseShape<any>
+    [K in keyof T & string]: T[K] extends BaseShape<any> | BaseShapeAbstract<any>
     ? K
     : `${K}.${ConfigJSPaths<T[K]>}`
   }[keyof T & string]
   : never;
 
-export type GetValueType<T, Path extends string> = Path extends `${infer Key}.${infer Rest}`
+export type GetValueType<T, Path extends string> =
+  Path extends `${infer Key}.${infer Rest}`
   ? Key extends keyof T
   ? GetValueType<T[Key], Rest>
   : never
   : Path extends keyof T
-  ? T[Path] extends BaseShape<infer U> ? U : never
+  ? T[Path] extends BaseShape<infer U> | BaseShapeAbstract<infer U>
+  ? U
+  : T[Path] extends Record<string, any>
+  ? { [K in keyof T[Path]]: GetValueType<T[Path], K & string> }
+  : never
   : never;
-
+  
 export type AnyConfigJSNestedShapes = {
   [key: string]: BaseShape<any> | BaseShapeAbstract<any> | AnyConfigJSNestedShapes;
 };
@@ -81,6 +87,7 @@ export type InferType<T> =
   T extends StringShape ? string :
   T extends NumberShape ? number :
   T extends BooleanShape ? boolean :
+  T extends EnumShape<infer U> ? U :
 
   // Shapes especiais
   T extends PartialShape<infer U> ? Partial<InferType<U>> :
@@ -89,14 +96,21 @@ export type InferType<T> =
   T extends ArrayShape<infer U> ? Array<InferType<U>> :
 
   // Objetos
-  T extends ObjectShape<infer U> ? { [K in keyof U]: InferType<U[K]> } :
-  T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
+  T extends ObjectShape<infer U> ? { readonly [K in keyof U]: InferType<U[K]> } :
+  T extends RecordShape<string, infer V> ? Record<string, InferType<V>> :
   T extends RecordShape<infer K, infer V> ? Record<K, InferType<V>> :
+  T extends { readonly [key: string]: ShapeDef<any> } ? { readonly [K in keyof T]: InferType<T[K]> } :
+  T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
+  T extends BaseShape<infer U> ? InferType<U> :
+
+  // Tipos literais diretos (para arrays primitivos)
+  T extends readonly (infer U)[] ? ReadonlyArray<U> :
+  T extends (infer U)[] ? Array<U> :
 
   // Fallback para BaseShape
   T extends BaseShape<infer U> ? InferType<U> :
 
-  // Tipos literais
+  // Types
   T;
 export type If<Value extends boolean, TrueResult, FalseResult = null> = Value extends true
   ? TrueResult
@@ -113,9 +127,11 @@ export type AnyConfigTypedDriver<DriverAsync extends boolean, DriverConfig exten
   set(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>, value: InferType<BaseShape<any>>): DriverAsync extends true ? Promise<InferType<BaseShape<any>>> : InferType<BaseShape<any>>;
   get(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<InferType<BaseShape<any>>> : InferType<BaseShape<any>>
   root(this: AnyConfigJS<DriverConfig>, shape: Record<string, BaseShape<any>>): DriverAsync extends true ? Promise<Record<string, BaseShape<any>>> : Record<string, BaseShape<any>>
+  insert(this: AnyConfigJS<DriverConfig>, shape: Record<string, BaseShape<any>>, values: Record<string, InferType<BaseShape<any>>>): DriverAsync extends true ? Promise<boolean> : boolean
   del(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<boolean> : boolean;
   supported_check(this: AnyConfigJS<DriverConfig>, shape: BaseShape<any>): DriverAsync extends true ? Promise<boolean> : boolean;
   has(this: AnyConfigJS<DriverConfig>, ...shapes: BaseShape<any>[]): DriverAsync extends true ? Promise<boolean> : boolean;
   save(this: AnyConfigJS<DriverConfig>, shapes: BaseShape<any>[]): DriverAsync extends true ? Promise<boolean> : boolean;
   load(this: AnyConfigJS<DriverConfig>, shapes: BaseShape<any>[]): DriverAsync extends true ? Promise<boolean> : boolean;
 };
+export type ExpandRecursively<T> = T extends Date | RegExp | bigint | symbol | null | undefined | Function ? T : T extends Map<infer K, infer V> ? Map<ExpandRecursively<K>, ExpandRecursively<V>> : T extends WeakMap<infer K, infer V> ? WeakMap<ExpandRecursively<K>, ExpandRecursively<V>> : T extends Set<infer U> ? Set<ExpandRecursively<U>> : T extends WeakSet<infer U> ? WeakSet<ExpandRecursively<U>> : T extends Array<infer E> ? Array<ExpandRecursively<E>> : T extends object ? { [K in keyof T]: ExpandRecursively<T[K]> } : T;

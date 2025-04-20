@@ -10,6 +10,7 @@ export class ConfigJSDriver<IsAsync, ExtendConfig extends object, TypedDriver ex
     public readonly load: TypedDriver['load'];
     public readonly save: TypedDriver['save'];
     public readonly root: TypedDriver['root'];
+    public readonly insert: TypedDriver['insert'];
     public readonly supported: TypedDriver['supported'];
     public readonly supported_check: TypedDriver['supported_check'];
 
@@ -22,6 +23,7 @@ export class ConfigJSDriver<IsAsync, ExtendConfig extends object, TypedDriver ex
         this.del = driver.del
         this.load = driver.load
         this.root = driver.root
+        this.insert = driver.insert
         this.save = driver.save
         this.supported = driver.supported
         this.supported_check = driver.supported_check

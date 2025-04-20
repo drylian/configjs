@@ -17,18 +17,34 @@ export * from "./libs/drivers";
 import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult } from "./libs/types";
 
 export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, Shapes extends AnyConfigJSNestedShapes> {
+    /** Internal cache */
+    #cache: any;
+    /**
+     * Information cached by the driver,
+     * normally information not processed
+     * by the shapes, raw data.
+     */
+    public get cached() {
+        return this.#cache;
+    };
+    public set cached(data) {
+        this.#cache = data;
+        this.cached_at = Date.now();
+    }
+    /**
+     * Last update of cache
+     */
+    public cached_at = 0;
     public readonly async: ConfigDriver['async'];
-    public readonly cached: ConfigInferNestedType<Shapes>;
     public readonly shapes: Shapes;
 
     constructor(public readonly driver: ConfigDriver & { async: ConfigDriver['async'] }, shapes: Shapes) {
         processShapes(shapes);
         this.shapes = shapes;
-        this.cached = {} as ConfigInferNestedType<Shapes>;
         this.async = this.driver.async;
     }
 
-    public getSchema<Path extends ConfigJSPaths<Shapes>>(path: Path) {
+    public getSchema<Path extends ConfigJSPaths<Shapes>>(path: Path): Shapes[Path] extends BaseShape<any> ? Shapes[Path] : BaseShape<any> {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -43,7 +59,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             throw `[ConfigJS]: Property "${path}" is not a configuration property`;
         }
 
-        return current;
+        return current as never;
     }
 
     public get config() {
@@ -62,6 +78,23 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
     public get<Path extends ConfigJSPaths<Shapes>>(path: Path) {
         const schema = this.getSchema(path);
         return this.driver.get.bind(this)(schema) as ConfigJSResult<ConfigDriver['async'], GetValueType<Shapes, Path>>;
+    }
+
+    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: RecursiveConfigJSResult<Shapes, Path>) {
+        const parts = path.split('.');
+        let current: any = this.shapes;
+
+        for (const part of parts) {
+            if (!current || !(part in current)) {
+                throw `[ConfigJS]: Key property "${path}" not found in shapes of config instance`;
+            }
+            current = current[part];
+        }
+
+        if ((current instanceof BaseShape)) {
+            throw `[ConfigJS]: Property "${path}" is not a root property`;
+        }
+        return this.driver.insert.bind(this)(current, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
     }
 
     public root<Path extends ConfigJSRootPaths<Shapes>>(path: Path) {

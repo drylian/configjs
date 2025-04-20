@@ -7,8 +7,28 @@ import type { BaseShape } from './shapes/base-shape';
 import { RecordShape } from './shapes/record-shape';
 import { EnumShape } from './shapes/enum-shape';
 
+//@ts-expect-error typed declaration diff
+declare function Enum<const T extends readonly (string | number)[]>(
+  keys: T
+): EnumShape<T[number]>;
+
+//@ts-expect-error typed declaration diff
+declare function Enum<const T extends Record<string, string | number>>(
+  enumObj: T
+): EnumShape<T[keyof T]>;
+
+function Enum<T extends object | readonly (string | number)[]>(arg: T) {
+  if (Array.isArray(arg)) {
+    return new EnumShape(arg);
+  } else {
+    const values = Object.values(arg)
+      .filter((v): v is T[keyof T] => typeof v === 'string' || typeof v === 'number');
+    return new EnumShape(values as never);
+  }
+}
+
 export const c = {
-  enum: <T extends string | number>(keys: T[]) => new EnumShape(keys),
+  enum: Enum,
   string: () => new StringShape(),
   number: () => new NumberShape(),
   boolean: () => new BooleanShape(),

@@ -1,6 +1,7 @@
 import { BaseShapeAbstract } from "./base-abstract";
 import { ConfigShapeError, type ErrorCreator } from "../error";
 import type { COptionsConfig } from "../types";
+import { type ExpandRecursively } from '../types';
 
 export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   abstract readonly _type: string;
@@ -15,7 +16,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
       code: opts?.code ?? data.code,
       message: opts?.message ?? data.message,
       meta: {
-        ...this.conf(),
+        ...this.conf() as object,
         ...data.meta ?? {},
         ...opts?.meta ?? {}
       }
@@ -23,10 +24,11 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
   }
 
   conf() {
-    return {
+    const result = {
       ...this._getConfig(),
       type: this._type,
     };
+    return result as ExpandRecursively<typeof result> ;
   }
 
   parseWithDefault(value: unknown): T {
@@ -44,7 +46,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         message: `The property '${this._prop}' is marked as required but was not provided. Please define this value before proceeding.`,
         value,
         meta: {
-          ...this.conf(),
+          ...this.conf()as object,
         }
       });
     }
@@ -68,7 +70,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         message: (error instanceof Error ? error.message : 'Unknown error'),
         value,
         meta: {
-          ...this.conf(),
+          ...this.conf() as object,
         }
       });
     }

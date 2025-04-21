@@ -1,7 +1,6 @@
 // string-shape.ts
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { BaseShape } from './base-shape';
-import { ConfigShapeError } from '../error';
 import type { COptionsConfig } from '../types';
 
 export class StringShape extends BaseShape<string> {

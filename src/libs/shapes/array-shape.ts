@@ -2,52 +2,6 @@ import type { COptionsConfig, InferType } from "../types";
 import { ConfigShapeError, type ErrorCreator } from "../error";
 import { BaseShape } from "./base-shape";
 
-const createArrayError = (options: {
-  code: string;
-  message: string;
-  meta?: Record<string, unknown>;
-}): ErrorCreator => {
-  return (value: unknown, path?: string) => ({
-    ...options,
-    path: path || '',
-    value,
-    meta: options.meta
-  });
-};
-
-const ARRAY_ERRORS = {
-  NOT_ARRAY: (opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'NOT_ARRAY',
-    message: opts?.message ?? 'Expected an array',
-    meta: opts?.meta
-  }),
-  INVALID_ELEMENT: (index: number, opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'INVALID_ARRAY_ELEMENT',
-    message: opts?.message ?? `Invalid array element at index ${index}`,
-    meta: opts?.meta ?? { index }
-  }),
-  EMPTY_ARRAY: (opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'EMPTY_ARRAY',
-    message: opts?.message ?? 'Array must not be empty',
-    meta: opts?.meta
-  }),
-  MIN_LENGTH: (min: number, opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'ARRAY_TOO_SHORT',
-    message: opts?.message ?? `Array must contain at least ${min} elements`,
-    meta: opts?.meta ?? { min }
-  }),
-  MAX_LENGTH: (max: number, opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'ARRAY_TOO_LONG',
-    message: opts?.message ?? `Array must contain at most ${max} elements`,
-    meta: opts?.meta ?? { max }
-  }),
-  EXACT_LENGTH: (length: number, opts?: COptionsConfig) => createArrayError({
-    code: opts?.code ?? 'INVALID_ARRAY_LENGTH',
-    message: opts?.message ?? `Array must contain exactly ${length} elements`,
-    meta: opts?.meta ?? { length }
-  })
-};
-
 export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferType<T>>> {
   public readonly _type = "array";
   public _minLength?: number;
@@ -65,7 +19,13 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
     if (value === null && this._nullable) return null as never;
 
     if (!Array.isArray(value)) {
-      this.createError(ARRAY_ERRORS.NOT_ARRAY(opts), value);
+      this.createError((value: unknown, path?: string) => ({
+        code: opts?.code ?? 'NOT_ARRAY',
+        message: opts?.message ?? 'Expected an array',
+        path: path || '',
+        value,
+        meta: opts?.meta
+      }), value);
     }
 
     const result = value.map((item, index) => {
@@ -88,7 +48,13 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
         if (error instanceof ConfigShapeError) {
           throw error;
         }
-        this.createError(ARRAY_ERRORS.INVALID_ELEMENT(index, opts), item);
+        this.createError((value: unknown, path?: string) => ({
+          code: opts?.code ?? 'INVALID_ARRAY_ELEMENT',
+          message: opts?.message ?? `Invalid array element at index ${index}`,
+          path: path || '',
+          value,
+          meta: opts?.meta ?? { index }
+        }), item);
       }
     });
 

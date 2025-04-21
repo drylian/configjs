@@ -1,78 +1,5 @@
-// number-shape.ts
-import type { ErrorCreator } from "../error";
 import type { COptionsConfig } from "../types";
 import { BaseShape } from "./base-shape";
-
-const createNumberError = (options: {
-  code: string;
-  message: string;
-  meta?: Record<string, unknown>;
-}): ErrorCreator => {
-  return (value: unknown, path?: string) => ({
-    ...options,
-    path: path || '',
-    value,
-    meta: options.meta
-  });
-};
-
-const NUMBER_ERRORS = {
-  NOT_NUMBER: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_NUMBER',
-    message: opts?.message ?? 'Expected a number',
-    meta: opts?.meta
-  }),
-  MIN_VALUE: (min: number, opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NUMBER_TOO_SMALL',
-    message: opts?.message ?? `Number must be at least ${min}`,
-    meta: opts?.meta ?? { min }
-  }),
-  MAX_VALUE: (max: number, opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NUMBER_TOO_LARGE',
-    message: opts?.message ?? `Number must be at most ${max}`,
-    meta: opts?.meta ?? { max }
-  }),
-  NOT_INTEGER: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_INTEGER',
-    message: opts?.message ?? 'Number must be an integer',
-    meta: opts?.meta
-  }),
-  NOT_POSITIVE: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_POSITIVE',
-    message: opts?.message ?? 'Number must be positive',
-    meta: opts?.meta
-  }),
-  NOT_NEGATIVE: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_NEGATIVE',
-    message: opts?.message ?? 'Number must be negative',
-    meta: opts?.meta
-  }),
-  NOT_SAFE_INTEGER: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_SAFE_INTEGER',
-    message: opts?.message ?? 'Number must be a safe integer',
-    meta: opts?.meta
-  }),
-  NOT_FINITE: (opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_FINITE',
-    message: opts?.message ?? 'Number must be finite',
-    meta: opts?.meta
-  }),
-  NOT_MULTIPLE_OF: (multiple: number, opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_MULTIPLE_OF',
-    message: opts?.message ?? `Number must be a multiple of ${multiple}`,
-    meta: opts?.meta ?? { multiple }
-  }),
-  NOT_IN_RANGE: (min: number, max: number, opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_IN_RANGE',
-    message: opts?.message ?? `Number must be between ${min} and ${max}`,
-    meta: opts?.meta ?? { min, max }
-  }),
-  NOT_EQUAL: (expected: number, opts?: COptionsConfig) => createNumberError({
-    code: opts?.code ?? 'NOT_EQUAL',
-    message: opts?.message ?? `Number must be equal to ${expected}`,
-    meta: opts?.meta ?? { expected }
-  })
-};
 
 export class NumberShape extends BaseShape<number> {
   public readonly _type = "number";
@@ -85,6 +12,8 @@ export class NumberShape extends BaseShape<number> {
   public _safe = false;
   public _multipleOf?: number;
   public _coerce = false;
+  public _decimalPlaces?: number;
+  public _precision?: number;
 
   coerce(): this {
     this._coerce = true;
@@ -104,17 +33,35 @@ export class NumberShape extends BaseShape<number> {
       } else if (typeof value === 'string') {
         value = Number(value);
         if (isNaN(value as number)) {
-          this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
+          this.createError((value: unknown, path?: string) => ({
+            code: opts?.code ?? 'NOT_NUMBER',
+            message: opts?.message ?? 'Expected a number',
+            path: path || '',
+            value,
+            meta: opts?.meta
+          }), value);
         }
       } else if (typeof value === 'number') {
         value = value;
       } else {
-        this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
+        this.createError((value: unknown, path?: string) => ({
+          code: opts?.code ?? 'NOT_NUMBER',
+          message: opts?.message ?? 'Expected a number',
+          path: path || '',
+          value,
+          meta: opts?.meta
+        }), value);
       }
     }
 
     if (typeof value !== 'number') {
-      this.createError(NUMBER_ERRORS.NOT_NUMBER(opts), value);
+      this.createError((value: unknown, path?: string) => ({
+        code: opts?.code ?? 'NOT_NUMBER',
+        message: opts?.message ?? 'Expected a number',
+        path: path || '',
+        value,
+        meta: opts?.meta
+      }), value);
     }
 
     let result = value as number;
@@ -221,6 +168,46 @@ export class NumberShape extends BaseShape<number> {
     );
   }
 
+  decimal(places: number, opts: COptionsConfig = {}): this {
+    this._decimalPlaces = places;
+    return this.refine(
+      (val) => {
+        const str = val.toString();
+        const decimalIndex = str.indexOf('.');
+        return decimalIndex === -1 ? true : str.length - decimalIndex - 1 <= places;
+      },
+      opts.message ?? `Number must have at most ${places} decimal places`,
+      opts.code ?? 'TOO_MANY_DECIMALS',
+      opts.meta ?? { maxDecimalPlaces: places }
+    );
+  }
+
+  precision(digits: number, opts: COptionsConfig = {}): this {
+    this._precision = digits;
+    return this.refine(
+      (val) => {
+        const str = val.toString().replace(/^0\.?0*|\./, '');
+        return str.length <= digits;
+      },
+      opts.message ?? `Number must have at most ${digits} significant digits`,
+      opts.code ?? 'TOO_MANY_DIGITS',
+      opts.meta ?? { maxPrecision: digits }
+    );
+  }
+
+  exactDecimal(places: number, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => {
+        const str = val.toString();
+        const decimalIndex = str.indexOf('.');
+        return decimalIndex !== -1 && str.length - decimalIndex - 1 === places;
+      },
+      opts.message ?? `Number must have exactly ${places} decimal places`,
+      opts.code ?? 'INVALID_DECIMAL_PLACES',
+      opts.meta ?? { requiredDecimalPlaces: places }
+    );
+  }
+
   equals(value: number, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => val === value,
@@ -267,5 +254,25 @@ export class NumberShape extends BaseShape<number> {
 
   longitude(opts: COptionsConfig = {}): this {
     return this.min(-180, opts).max(180, opts);
+  }
+
+  percentage(opts: COptionsConfig = {}): this {
+    return this.min(0, opts).max(100, opts);
+  }
+
+  probability(opts: COptionsConfig = {}): this {
+    return this.min(0, opts).max(1, opts);
+  }
+
+  byte(opts: COptionsConfig = {}): this {
+    return this.int(opts).min(0, opts).max(255, opts);
+  }
+
+  natural(opts: COptionsConfig = {}): this {
+    return this.int(opts).min(0, opts);
+  }
+
+  whole(opts: COptionsConfig = {}): this {
+    return this.int(opts).min(1, opts);
   }
 }

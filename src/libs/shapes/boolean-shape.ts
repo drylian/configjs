@@ -1,32 +1,5 @@
-import type { ErrorCreator } from "../error";
 import type { COptionsConfig } from "../types";
 import { BaseShape } from "./base-shape";
-
-const createBooleanError = (options: {
-  code: string;
-  message: string;
-  meta?: Record<string, unknown>;
-}): ErrorCreator => {
-  return (value: unknown, path?: string) => ({
-    ...options,
-    path: path || '',
-    value,
-    meta: options.meta
-  });
-};
-
-const BOOLEAN_ERRORS = {
-  NOT_BOOLEAN: (opts?: COptionsConfig) => createBooleanError({
-    code: opts?.code ?? 'NOT_BOOLEAN',
-    message: opts?.message ?? 'Expected a boolean',
-    meta: opts?.meta
-  }),
-  INVALID_BOOLEAN_STRING: (opts?: COptionsConfig) => createBooleanError({
-    code: opts?.code ?? 'INVALID_BOOLEAN_STRING',
-    message: opts?.message ?? 'String must be "true", "false", "1", or "0"',
-    meta: opts?.meta
-  })
-};
 
 export class BooleanShape extends BaseShape<boolean> {
   public readonly _type = "boolean";
@@ -52,7 +25,13 @@ export class BooleanShape extends BaseShape<boolean> {
       if (this._strictStrings && typeof value === 'string') {
         if (value === 'true' || value === '1') return true;
         if (value === 'false' || value === '0') return false;
-        this.createError(BOOLEAN_ERRORS.INVALID_BOOLEAN_STRING(opts), value);
+        this.createError((value: unknown, path?: string) => ({
+          code: opts?.code ?? 'INVALID_BOOLEAN_STRING',
+          message: opts?.message ?? 'String must be "true", "false", "1", or "0"',
+          path: path || '',
+          value,
+          meta: opts?.meta
+        }), value);
       }
       if (value === 'true' || value === '1') return true;
       if (value === 'false' || value === '0') return false;
@@ -63,7 +42,13 @@ export class BooleanShape extends BaseShape<boolean> {
     }
 
     if (typeof value !== 'boolean') {
-      this.createError(BOOLEAN_ERRORS.NOT_BOOLEAN(opts), value);
+      this.createError((value: unknown, path?: string) => ({
+        code: opts?.code ?? 'NOT_BOOLEAN',
+        message: opts?.message ?? 'Expected a boolean',
+        path: path || '',
+        value,
+        meta: opts?.meta
+      }), value);
     }
 
     return this._checkImportant(this._applyOperations(value, this._key));

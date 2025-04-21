@@ -1,33 +1,6 @@
-// record-shape.ts
 import { BaseShape } from './base-shape';
 import { type COptionsConfig, type InferType } from '../types';
 import { ConfigShapeError, type ErrorCreator } from '../error';
-
-const createRecordError = (options: {
-  code: string;
-  message: string;
-  meta?: Record<string, unknown>;
-}): ErrorCreator => {
-  return (value: unknown, path?: string) => ({
-    ...options,
-    path: path || '',
-    value,
-    meta: options.meta
-  });
-};
-
-const RECORD_ERRORS = {
-  NOT_OBJECT: (opts?: COptionsConfig) => createRecordError({
-    code: opts?.code ?? 'NOT_OBJECT',
-    message: opts?.message ?? 'Expected an object',
-    meta: opts?.meta
-  }),
-  INVALID_PROPERTY: (key: string, opts?: COptionsConfig) => createRecordError({
-    code: opts?.code ?? 'INVALID_PROPERTY',
-    message: opts?.message ?? `Invalid property "${key}"`,
-    meta: opts?.meta ?? { property: key }
-  })
-};
 
 export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>>
   extends BaseShape<Record<K, InferType<V>>> {
@@ -45,15 +18,13 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
       ...(this._default ?? {})
     };
 
-    // Verifica se há um valor padrão definido no próprio RecordShape
     if (typeof this._default !== 'undefined') {
       return this._default;
     }
 
-    let key: K;
-    key = this._keyShape._default as K;
-
+    let key: K = this._keyShape._default as K;
     let value: InferType<V>;
+
     if (this._valueShape instanceof BaseShape) {
       if (typeof this._valueShape._default !== 'undefined') {
         value = this._valueShape._default;
@@ -73,8 +44,15 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
   parse(value: unknown, opts?: COptionsConfig): Record<K, InferType<V>> {
     if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
     if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
+    
     if (value === null || typeof value !== 'object') {
-      this.createError(RECORD_ERRORS.NOT_OBJECT(opts), value);
+      this.createError((value: unknown, path?: string) => ({
+        code: opts?.code ?? 'NOT_OBJECT',
+        message: opts?.message ?? 'Expected an object',
+        path: path || '',
+        value,
+        meta: opts?.meta
+      }), value);
     }
 
     const result: Record<any, any> = {};
@@ -88,9 +66,16 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         if (error instanceof ConfigShapeError) {
           throw error;
         }
-        this.createError(RECORD_ERRORS.INVALID_PROPERTY(key, opts), input[key]);
+        this.createError((value: unknown, path?: string) => ({
+          code: opts?.code ?? 'INVALID_PROPERTY',
+          message: opts?.message ?? `Invalid property "${key}"`,
+          path: path || '',
+          value,
+          meta: opts?.meta ?? { property: key }
+        }), input[key]);
       }
     }
+
     return this._checkImportant(this._applyOperations(result, this._key));
   }
 
@@ -136,6 +121,70 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
       opts.message ?? `Record must not have property "${String(key)}"`,
       opts.code ?? 'FORBIDDEN_PROPERTY',
       opts.meta ?? { property: key }
+    );
+  }
+
+  propertyValue(key: K, validator: (value: InferType<V>) => boolean, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => key in val && validator(val[key]),
+      opts.message ?? `Property "${String(key)}" is invalid`,
+      opts.code ?? 'INVALID_PROPERTY_VALUE',
+      opts.meta ?? { property: key }
+    );
+  }
+
+  propertyShape(key: K, shape: BaseShape<any>, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => key in val && shape.parse(val[key]) === val[key],
+      opts.message ?? `Property "${String(key)}" has invalid shape`,
+      opts.code ?? 'INVALID_PROPERTY_SHAPE',
+      opts.meta ?? { property: key }
+    );
+  }
+
+  nonEmpty(opts: COptionsConfig = {}): this {
+    return this.minProperties(1, opts);
+  }
+
+  propertyNames(validator: (key: string) => boolean, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => Object.keys(val).every(validator),
+      opts.message ?? 'Some property names are invalid',
+      opts.code ?? 'INVALID_PROPERTY_NAMES',
+      opts.meta
+    );
+  }
+
+  propertyValues(validator: (value: unknown) => boolean, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => Object.values(val).every(validator),
+      opts.message ?? 'Some property values are invalid',
+      opts.code ?? 'INVALID_PROPERTY_VALUES',
+      opts.meta
+    );
+  }
+
+  exactPropertiesShape(shape: Record<K, BaseShape<any>>, opts: COptionsConfig = {}): this {
+    return this.refine(
+      (val) => {
+        const valKeys = Object.keys(val);
+        const shapeKeys = Object.keys(shape);
+        
+        if (valKeys.length !== shapeKeys.length) return false;
+        if (!valKeys.every(k => shapeKeys.includes(k))) return false;
+        
+        return Object.entries(val).every(([key, value]) => {
+          try {
+            shape[key as K].parse(value);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      },
+      opts.message ?? 'Record shape does not match required structure',
+      opts.code ?? 'INVALID_RECORD_SHAPE',
+      opts.meta ?? { requiredShape: shape }
     );
   }
 }

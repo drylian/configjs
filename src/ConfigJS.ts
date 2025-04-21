@@ -15,7 +15,7 @@ export * from "./libs/shapes/record-shape";
 export * from "./libs/shapes/string-shape";
 export * from "./libs/driver";
 export * from "./libs/drivers";
-import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type InferType } from "./libs/types";
+import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type InferType, type ExpandRecursively, type DeepPartial } from "./libs/types";
 
 /**
  * Configuration management class that provides a type-safe interface
@@ -171,7 +171,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         if ((current instanceof BaseShape)) {
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
-        return this.driver.root.bind(this)(current) as ConfigJSResult<ConfigDriver['async'], RecursiveConfigJSResult<Shapes, Path>>;
+        return this.driver.root.bind(this)(current) as ConfigJSResult<ConfigDriver['async'], ExpandRecursively<RecursiveConfigJSResult<Shapes, Path>>>;
     }
 
     /**
@@ -190,8 +190,15 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @param values - Complete set of configuration values
      * @returns Operation result (type depends on driver's async flag)
      */
-    public define(values: InferType<Shapes>) {
-        return this.driver.insert.bind(this)(this.shapes as never, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
+    public define(values: ExpandRecursively<DeepPartial<InferType<Shapes>>>) {
+        const filtered = Object.keys(values).reduce((acc:any, key) => {
+            if (key in this.shapes) {
+                acc[key] = this.shapes[key];
+            }
+            return acc;
+        }, {} as Partial<typeof this.shapes>);
+    
+        return this.driver.insert.bind(this)(filtered as never, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
     }
 
     /**

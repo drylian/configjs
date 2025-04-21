@@ -18,11 +18,11 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
 
     parse(value: unknown, opts?: COptionsConfig): Partial<InferType<T>> {
         if (value === null || typeof value !== 'object') {
-            this.createError((value: unknown, path?: string) => ({
+            this.createError((v, p) => ({
+                value: v,
+                path: p || '',
                 code: opts?.code ?? 'NOT_OBJECT',
                 message: opts?.message ?? 'Expected an object',
-                path: path || '',
-                value,
                 meta: opts?.meta
             }), value);
         }
@@ -31,22 +31,21 @@ export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<In
         const input = value as Record<string, unknown>;
 
         if (this._shape instanceof ObjectShape) {
-            for (const key in (this._shape as any)._shape) {
+            //@ts-expect-error
+            for (const key in this._shape._shape) {
                 if (input[key] !== undefined) {
                     try {
-                        result[key] = (this._shape as any)._shape[key].parseWithPath(
-                            input[key], 
-                            `${this._prop}.${key}`
-                        );
+                        //@ts-expect-error
+                        result[key] = this._shape._shape[key].parseWithPath(input[key], `${this._prop}.${key}`);
                     } catch (error) {
                         if (error instanceof ConfigShapeError) {
                             throw error;
                         }
-                        this.createError((value: unknown, path?: string) => ({
+                        this.createError((v, p) => ({
+                            value: v,
+                            path: p || '',
                             code: opts?.code ?? 'INVALID_PROPERTY',
                             message: opts?.message ?? `Invalid property "${key}"`,
-                            path: path || '',
-                            value,
                             meta: opts?.meta ?? { property: key }
                         }), input[key]);
                     }

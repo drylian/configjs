@@ -57,6 +57,14 @@ export type ConfigJSPaths<T> =
     : `${K}.${ConfigJSPaths<T[K]>}`
   }[keyof T & string]
   : never;
+  
+export type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Function
+    ? T[K]
+    : T[K] extends object
+      ? DeepPartial<T[K]>
+      : T[K];
+};
 
 export type GetValueType<T, Path extends string> =
   Path extends `${infer Key}.${infer Rest}`
@@ -70,7 +78,7 @@ export type GetValueType<T, Path extends string> =
   ? { [K in keyof T[Path]]: GetValueType<T[Path], K & string> }
   : never
   : never;
-  
+
 export type AnyConfigJSNestedShapes = {
   [key: string]: BaseShape<any> | BaseShapeAbstract<any> | AnyConfigJSNestedShapes;
 };
@@ -96,10 +104,10 @@ export type InferType<T> =
   T extends ArrayShape<infer U> ? Array<InferType<U>> :
 
   // Objetos
-  T extends ObjectShape<infer U> ? { readonly [K in keyof U]: InferType<U[K]> } :
+  T extends ObjectShape<infer U> ? { [K in keyof U]: InferType<U[K]> } :
   T extends RecordShape<string, infer V> ? Record<string, InferType<V>> :
   T extends RecordShape<infer K, infer V> ? Record<K, InferType<V>> :
-  T extends { readonly [key: string]: ShapeDef<any> } ? { readonly [K in keyof T]: InferType<T[K]> } :
+  T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
   T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
   T extends BaseShape<infer U> ? InferType<U> :
 

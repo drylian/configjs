@@ -13,13 +13,18 @@ export class EnumShape<T extends (string | number)> extends BaseShape<T> {
   parse(value: unknown, opts?: COptionsConfig): Readonly<T> {
     if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
     if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
-    
-    return this.refine(
-      () => this._values.includes(value as T),
-      opts?.message ?? `Value must be one of: ${this._values.join(', ')}`,
-      opts?.code ?? 'INVALID_ENUM_VALUE',
-      opts?.meta ?? { validValues: this._values }
-    ).parse(value as T);
+    if (!this._values.includes(value as T)) {
+      this.createError((value, path?) => ({
+        value,
+        path: path || "",
+        code: opts?.code ?? 'INVALID_ENUM_VALUE',
+        message: opts?.message ?? `Value must be one of: ${this._values.join(', ')}`,
+        meta: opts?.meta ?? { validValues: this._values }
+      }),
+        value
+      );
+    }
+    return this._checkImportant(this._applyOperations(value as T, this._key));
   }
 
   hasValue(value: T, opts: COptionsConfig = {}): this {

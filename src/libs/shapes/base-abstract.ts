@@ -52,11 +52,9 @@ export abstract class BaseShapeAbstract<T> {
     }
 
     default(value: T): this {
-        // Se não houver operações de transformação, armazena como _default final
         if (this._operations.length === 0 || this._operations.every(op => op.type !== 'transform')) {
             this._default = value;
         } else {
-            // Se houver transformações, armazena como pré-transform default
             this._pretransforms.push(value);
         }
         return this;

@@ -21,7 +21,7 @@ export class NumberShape extends BaseShape<number> {
   }
 
   parse(value: unknown, opts?: COptionsConfig): number {
-    if (typeof value === "undefined" && this._default) value = this._default;
+    if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
     
@@ -231,7 +231,7 @@ export class NumberShape extends BaseShape<number> {
       (val) => values.includes(val),
       opts.message ?? `Number must be one of: ${values.join(', ')}`,
       opts.code ?? 'NOT_IN_VALUES',
-      opts.meta ?? { options: values }
+      opts.meta ?? { options: values.join(', ') }
     );
   }
 
@@ -240,12 +240,12 @@ export class NumberShape extends BaseShape<number> {
       (val) => !values.includes(val),
       opts.message ?? `Number must not be one of: ${values.join(', ')}`,
       opts.code ?? 'IN_FORBIDDEN_VALUES',
-      opts.meta ?? { forbidden: values }
+      opts.meta ?? { forbidden: values.join(', ') }
     );
   }
 
   port(opts: COptionsConfig = {}): this {
-    return this.int(opts).min(0, opts).max(65535, opts);
+    return this.int(opts).min(1, opts).max(65535, opts);
   }
 
   latitude(opts: COptionsConfig = {}): this {

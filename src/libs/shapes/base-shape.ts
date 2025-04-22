@@ -71,6 +71,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         value,
         meta: {
           ...this.conf() as object,
+          message:(error instanceof Error ? error.message : 'Unknown error')
         }
       });
     }

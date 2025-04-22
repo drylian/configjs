@@ -98,7 +98,6 @@ export const envDriver = new ConfigJSDriver({
          * // Warning: Node JS not support this feature
          * ```
          */
-        //@ts-expect-error It doesn't pay to install the bun just for that
         processEnv: typeof Bun !== "undefined" ? true : false,
         /**
          * When reading the env or saving it using the config,
@@ -141,9 +140,8 @@ export const envDriver = new ConfigJSDriver({
         }
         const contents = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, string>;
         if (!this.cached) this.cached = contents;
-
         try {
-            let valueToStore: string;
+            let valueToStore: string = shape.parse(newValue);
 
             if (shape instanceof ArrayShape) {
                 valueToStore = JSON.stringify(newValue);
@@ -158,7 +156,7 @@ export const envDriver = new ConfigJSDriver({
             return newValue;
         } catch (error) {
             console.error(`[EnvDriver] Error setting value for "${shape._prop}" (key:${shape._key}):`, error);
-            return newValue;
+            throw error;
         }
     },
 
@@ -273,7 +271,7 @@ export const envDriver = new ConfigJSDriver({
                         : getShapeDefault(shape_or_object);
                 } catch (err) {
                     const error = err as Error;
-                    console.warn(`[EnvDriver] Error parsing value for ${key}: ${error.message}`);
+                    console.warn(`[EnvDriver] Error parsing value for ${key}: ${error.message}, using default`);
                     result[key] = getShapeDefault(shape_or_object);
                 }
             } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {

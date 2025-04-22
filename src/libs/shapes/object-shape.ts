@@ -1,73 +1,17 @@
 import { BaseShape } from './base-shape';
 import { type ShapeDef, type InferType, type COptionsConfig } from '../types';
 import { ConfigShapeError } from '../error';
-import { processShapes } from '../functions';
-import { ArrayShape } from './array-shape';
+import { deepEqual, processShapes } from '../functions';
 import { RecordShape } from './record-shape';
 
 type ShapeObject<T extends Record<string, ShapeDef<any>>> = {
     [K in keyof T]: InferType<T[K]>;
 };
 
-export class PartialShape<T extends BaseShape<any>> extends BaseShape<Partial<InferType<T>>> {
-    public readonly _type = "object";
-
-    constructor(private readonly _shape: T) {
-        super();
-    }
-
-    parse(value: unknown, opts?: COptionsConfig): Partial<InferType<T>> {
-        if (value === null || typeof value !== 'object') {
-            this.createError((v, p) => ({
-                value: v,
-                path: p || '',
-                code: opts?.code ?? 'NOT_OBJECT',
-                message: opts?.message ?? 'Expected an object',
-                meta: opts?.meta
-            }), value);
-        }
-
-        const result: any = {};
-        const input = value as Record<string, unknown>;
-
-        if (this._shape instanceof ObjectShape) {
-            //@ts-expect-error
-            for (const key in this._shape._shape) {
-                if (input[key] !== undefined) {
-                    try {
-                        //@ts-expect-error
-                        result[key] = this._shape._shape[key].parseWithPath(input[key], `${this._prop}.${key}`);
-                    } catch (error) {
-                        if (error instanceof ConfigShapeError) {
-                            throw error;
-                        }
-                        this.createError((v, p) => ({
-                            value: v,
-                            path: p || '',
-                            code: opts?.code ?? 'INVALID_PROPERTY',
-                            message: opts?.message ?? `Invalid property "${key}"`,
-                            meta: opts?.meta ?? { property: key }
-                        }), input[key]);
-                    }
-                }
-            }
-        } else {
-            throw new ConfigShapeError({
-                code: 'INVALID_PARTIAL_SHAPE',
-                path: this._prop,
-                message: 'PartialShape can only be used with ObjectShape',
-                value,
-                ...opts
-            });
-        }
-
-        return result;
-    }
-}
-
 export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseShape<ShapeObject<T>> {
     public readonly _type = "object";
     private readonly _shape: T;
+    private static circularCache = new WeakMap<object, any>();
 
     constructor(_shape: T) {
         super();
@@ -75,114 +19,176 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         this._shape = _shape;
     }
 
+    private copyMetadata<U extends BaseShape<any>>(newShape: U) {
+        newShape._optional = this._optional;
+        newShape._nullable = this._nullable;
+        newShape._default = this._default;
+        newShape._key = this._key;
+        return newShape;
+    }
+
     getDefaults(): ShapeObject<T> {
-        const result: any = {
-            ...(this._default ?? {})
-        };
-        
+        const result: any = { ...(this._default ?? {}) };
+
         for (const key in this._shape) {
             const shape = this._shape[key] as BaseShape<any>;
-            
-            if (shape instanceof BaseShape) {
-                if (shape instanceof RecordShape) {
-                    result[key] = shape.getDefaults();
-                } else if (shape instanceof ObjectShape) {
-                    result[key] = shape.getDefaults();
-                } else if (shape instanceof ArrayShape) {
-                    if (shape._shape instanceof ObjectShape) {
-                        result[key] = shape._default ?? [shape._shape.getDefaults()];
-                    } else {
-                        result[key] = shape._default;
-                    }
-                } else {
-                    result[key] = shape._default;
-                }
+
+            if (shape instanceof RecordShape) {
+                result[key] = shape?.getDefaults();
+            } else if (shape instanceof BaseShape) {
+                result[key] = shape?._default;
             } else {
                 result[key] = shape;
             }
         }
-        
+
         return result;
     }
 
     parse(value: unknown, opts?: COptionsConfig): ShapeObject<T> {
-        if (typeof value === "undefined" && this._optional) return undefined as never;
-        if (value === null && this._nullable) return null as never;    
-        if (typeof value !== 'object' || value === null) {
-            this.createError((value: unknown, path?: string) => ({
-                code: opts?.code ?? 'NOT_OBJECT',
-                message: opts?.message ?? 'Expected an object',
-                path: path || '',
-                value,
-                meta: opts?.meta
-            }), value);
-        }
-
-        const result: any = {};
-        const input = value as Record<string, unknown>;
-
-        const shapedef = this._default ?? {};
-        const shapeDefs = this.getDefaults();
-        const defaults = {
-            ...shapeDefs,
-            ...shapedef
-        };
-        
-        for (const key in this._shape) {
-            const shape = this._shape[key];
-            const object_default = defaults[key];
-
-            try {
-                const value = input[key];
-                if (shape?.parse) {
-                    const use_default = (value == null) && (object_default !== undefined || shape._default !== undefined);
-                    result[key] = shape.parse(use_default ? object_default ?? shape._default : value);
-                }
-                else if (value !== shape) {
-                    throw new ConfigShapeError({
-                        code: 'INVALID_LITERAL',
-                        path: `${key}`,
-                        message: `Expected ${JSON.stringify(shape)}`,
-                        value,
-                        ...opts
-                    });
-                } else {
-                    result[key] = shape ?? object_default;
-                }
-            } catch (error) {
-                if (error instanceof ConfigShapeError) {
-                    throw error;
-                }
-                this.createError((value: unknown, path?: string) => ({
-                    code: opts?.code ?? 'INVALID_PROPERTY',
-                    message: opts?.message ?? `Invalid property "${key}"`,
-                    path: path || '',
-                    value,
-                    meta: opts?.meta ?? { property: key }
-                }), input[key]);
+        if (typeof value === "undefined") {
+            if (typeof this._default !== "undefined") {
+                value = { ...this.getDefaults(), ...this._default };
+            } else if (this._optional) {
+                return undefined as never;
             }
         }
 
-        return this._checkImportant(this._applyOperations(result, this._key));
+        if (value === null && this._nullable) {
+            return null as never;
+        }
+
+        if (!this.isPlainObject(value)) {
+            this.createError(
+                (val: unknown, path?: string) => ({
+                    code: opts?.code ?? 'NOT_OBJECT',
+                    message: opts?.message ?? 'Expected a plain object',
+                    path: path || '',
+                    value: val,
+                    meta: opts?.meta
+                }),
+                value
+            );
+        }
+
+        const input = value as Record<string, unknown>;
+        const result: any = {};
+        const defaults = this.getDefaults();
+        const errors: ConfigShapeError[] = [];
+        const keys = Object.keys(this._shape);
+
+        if (ObjectShape.circularCache.has(input)) {
+            return ObjectShape.circularCache.get(input);
+        }
+        ObjectShape.circularCache.set(input, result);
+
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            if (!Object.prototype.hasOwnProperty.call(this._shape, key)) continue;
+
+            const shape = this._shape[key];
+            const propertyDefault = defaults[key];
+            const inputValue = input[key];
+            //@ts-expect-error ignore 
+            const path = opts?.path ? `${opts.path}.${key}` : key;
+
+            try {
+                if (shape instanceof BaseShape) {
+                    let valueToParse: unknown;
+                    if (inputValue === undefined) {
+                        if (propertyDefault !== undefined) {
+                            valueToParse = propertyDefault;
+                        } else if (shape._default !== undefined) {
+                            valueToParse = shape._default;
+                        } else if (shape._optional) {
+                            continue; // Omit optional keys without defaults
+                        } else {
+                            throw new ConfigShapeError({
+                                code: 'MISSING_PROPERTY',
+                                path,
+                                message: `Missing required property "${key}"`,
+                                value: undefined,
+                                ...opts
+                            });
+                        }
+                    } else {
+                        valueToParse = inputValue;
+                    }
+
+                    if (shape._nullable && valueToParse === null) {
+                        result[key] = null;
+                    } else {
+                        //@ts-expect-error ignore 
+                        result[key] = shape.parse(valueToParse, {
+                            ...opts,
+                            path,
+                            parent: result
+                        });
+                    }
+                } else if (!deepEqual(inputValue, shape)) {
+                    throw new ConfigShapeError({
+                        code: 'INVALID_LITERAL',
+                        path,
+                        message: `Expected ${JSON.stringify(shape)}`,
+                        value: inputValue,
+                        ...opts
+                    });
+                } else {
+                    result[key] = inputValue;
+                }
+            } catch (error) {
+                if (error instanceof ConfigShapeError) {
+                    errors.push(error);
+                } else {
+                    errors.push(new ConfigShapeError({
+                        code: 'INVALID_PROPERTY',
+                        path,
+                        message: `Invalid property "${key}"`,
+                        value: inputValue,
+                        meta: { property: key },
+                        ...opts
+                    }));
+                }
+            }
+        }
+
+        ObjectShape.circularCache.delete(input);
+
+        if (errors.length > 0) {
+            throw new AggregateError(errors, 'Multiple validation errors');
+        }
+        //@ts-expect-error ignore 
+        return this._checkImportant(this._applyOperations(result, opts?.path));
     }
 
-    partial() {
-        if (!(this instanceof ObjectShape)) {
-            throw new ConfigShapeError({
-                code: 'INVALID_PARTIAL_CALL',
-                path: (this as BaseShape<any>)._prop,
-                message: 'partial() can only be called on ObjectShape instances',
-                value: this
-            });
+    private isPlainObject(obj: unknown): obj is Record<string, unknown> {
+        return Object.prototype.toString.call(obj) === '[object Object]' &&
+            Object.getPrototypeOf(obj) === Object.prototype;
+    }
+
+    /**
+     * Creates a new ObjectShape with all properties made optional
+     * @returns New ObjectShape instance with optional properties
+     */
+    partial(): ObjectShape<{ [K in keyof T]: T[K] extends BaseShape<infer U> ? BaseShape<U | undefined> : T[K] }> {
+        const newShape: any = {};
+        for (const key in this._shape) {
+            const shape = this._shape[key] as BaseShape<any>;
+            if (shape instanceof BaseShape) {
+                newShape[key] = shape.optional();
+            } else {
+                newShape[key] = shape
+            }
         }
-        return new PartialShape(this);
+        return this.copyMetadata(new ObjectShape(newShape));
     }
 
     merge<U extends Record<string, ShapeDef<any>>>(shape: ObjectShape<U>): ObjectShape<T & U> {
-        return new ObjectShape({
+        //@ts-expect-error ignore diff types
+        return this.copyMetadata(new ObjectShape({
             ...this._shape,
             ...shape._shape
-        }) as ObjectShape<T & U>;
+        } as T & U));
     }
 
     pick<K extends keyof T>(keys: K[]): ObjectShape<Pick<T, K>> {
@@ -190,7 +196,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         for (const key of keys) {
             newShape[key] = this._shape[key];
         }
-        return new ObjectShape(newShape);
+        //@ts-expect-error ignore diff types 
+        return this.copyMetadata(new ObjectShape(newShape));
     }
 
     omit<K extends keyof T>(keys: K[]): ObjectShape<Omit<T, K>> {
@@ -198,7 +205,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
         for (const key of keys) {
             delete newShape[key];
         }
-        return new ObjectShape(newShape as Omit<T, K>);
+        //@ts-expect-error ignore diff types 
+        return this.copyMetadata(new ObjectShape(newShape as Omit<T, K>));
     }
 
     hasProperty<K extends keyof T>(key: K, opts: COptionsConfig = {}): this {
@@ -247,8 +255,8 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
     }
 
     propertyValue<K extends keyof T>(
-        key: K, 
-        validator: (value: InferType<T[K]>) => boolean, 
+        key: K,
+        validator: (value: InferType<T[K]>) => boolean,
         opts: COptionsConfig = {}
     ): this {
         return this.refine(
@@ -261,14 +269,5 @@ export class ObjectShape<T extends Record<string, ShapeDef<any>>> extends BaseSh
 
     nonEmpty(opts: COptionsConfig = {}): this {
         return this.minProperties(1, opts);
-    }
-
-    deepPartial(): ObjectShape<{ [K in keyof T]: T[K] extends BaseShape<any> ? PartialShape<T[K]> : T[K] }> {
-        const newShape: any = {};
-        for (const key in this._shape) {
-            const shape = this._shape[key];
-            newShape[key] = (shape as any) instanceof BaseShape ? shape.partial?.() ?? shape : shape;
-        }
-        return new ObjectShape(newShape);
     }
 }

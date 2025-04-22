@@ -1,11 +1,13 @@
 import type { BaseShapeAbstract, ConfigJS, EnumShape } from "../ConfigJS";
+import type { AnyShape } from "./shapes/any-shape";
 import type { ArrayShape } from "./shapes/array-shape";
 import type { BaseShape } from "./shapes/base-shape";
 import type { BooleanShape } from "./shapes/boolean-shape";
 import type { NumberShape } from "./shapes/number-shape";
-import type { ObjectShape, PartialShape } from "./shapes/object-shape";
+import type { ObjectShape } from "./shapes/object-shape";
 import type { RecordShape } from "./shapes/record-shape";
 import type { StringShape } from "./shapes/string-shape";
+import type { UnionShape } from "./shapes/union-shape";
 
 export type COptionsConfig = { code?: string, message?: string, meta?: Record<string, unknown> };
 export type ConfigJSRootPaths<T> =
@@ -90,15 +92,17 @@ export type ConfigInferNestedType<T> = T extends BaseShape<infer U>
   : never;
 
 export type ShapeDef<T> = BaseShape<T> | T;
+
 export type InferType<T> =
   // Tipos primitivos diretos
   T extends StringShape ? string :
+  T extends AnyShape ? any :
   T extends NumberShape ? number :
   T extends BooleanShape ? boolean :
   T extends EnumShape<infer U> ? U :
 
   // Shapes especiais
-  T extends PartialShape<infer U> ? Partial<InferType<U>> :
+  T extends UnionShape<infer U> ? InferUnionType<U> :
 
   // Arrays
   T extends ArrayShape<infer U> ? Array<InferType<U>> :
@@ -107,19 +111,22 @@ export type InferType<T> =
   T extends ObjectShape<infer U> ? { [K in keyof U]: InferType<U[K]> } :
   T extends RecordShape<string, infer V> ? Record<string, InferType<V>> :
   T extends RecordShape<infer K, infer V> ? Record<K, InferType<V>> :
-  T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
-  T extends { [key: string]: ShapeDef<any> } ? { [K in keyof T]: InferType<T[K]> } :
-  T extends BaseShape<infer U> ? InferType<U> :
 
-  // Tipos literais diretos (para arrays primitivos)
-  T extends readonly (infer U)[] ? ReadonlyArray<U> :
-  T extends (infer U)[] ? Array<U> :
+  // Tipos diretos (para arrays primitivos)
+  T extends readonly (infer U)[] ? ReadonlyArray<InferType<U>> :
+  T extends (infer U)[] ? Array<InferType<U>> :
 
-  // Fallback para BaseShape
-  T extends BaseShape<infer U> ? InferType<U> :
-
-  // Types
+  // Fallbacks finais
+  T extends BaseShape<infer U> ? U :
   T;
+
+type InferUnionType<T extends BaseShape<any>[]> =
+  T extends [infer First, ...infer Rest]
+    ? First extends BaseShape<any>
+      ? InferType<First> | (Rest extends BaseShape<any>[] ? InferUnionType<Rest> : never)
+      : never
+    : never;
+
 export type If<Value extends boolean, TrueResult, FalseResult = null> = Value extends true
   ? TrueResult
   : Value extends false

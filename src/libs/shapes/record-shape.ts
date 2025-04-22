@@ -42,8 +42,9 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
   }
 
   parse(value: unknown, opts?: COptionsConfig): Record<K, InferType<V>> {
-    if (typeof value === "undefined" && this._optional && typeof this._default !== "undefined") return undefined as never;
-    if (value === null && this._nullable && typeof this._default !== "undefined") return null as never;
+    if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
+    if (typeof value === "undefined" && this._optional) return undefined as never;
+    if (value === null && this._nullable) return null as never;
     
     if (value === null || typeof value !== 'object') {
       this.createError((value: unknown, path?: string) => ({

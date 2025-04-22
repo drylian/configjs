@@ -17,14 +17,14 @@ export class BooleanShape extends BaseShape<boolean> {
   }
 
   parse(value: unknown, opts?: COptionsConfig): boolean {
-    if (typeof value === "undefined" && this._default) value = this._default;
+    if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
-    
+
     if (this._coerce) {
       if (this._strictStrings && typeof value === 'string') {
-        if (value === 'true' || value === '1') return true;
-        if (value === 'false' || value === '0') return false;
+        if (typeof value == "string" && value.toLowerCase() === 'true' || value === '1') value = true;
+        if (typeof value == "string" && value.toLowerCase() === 'false' || value === '0') value = false;
         this.createError((value: unknown, path?: string) => ({
           code: opts?.code ?? 'INVALID_BOOLEAN_STRING',
           message: opts?.message ?? 'String must be "true", "false", "1", or "0"',
@@ -33,12 +33,14 @@ export class BooleanShape extends BaseShape<boolean> {
           meta: opts?.meta
         }), value);
       }
-      if (value === 'true' || value === '1') return true;
-      if (value === 'false' || value === '0') return false;
-      if (typeof value === 'number') return value !== 0;
-      if (typeof value === 'string') return value.length > 0;
-      if (value === null || value === undefined) return false;
-      return Boolean(value);
+      if (typeof value === "number" && isNaN(value) ) value = false;
+      if (typeof value == "string" && value.toLowerCase() === 'true' || value === '1') value = true;
+      if (typeof value == "string" && value.toLowerCase() === 'false' || value === '0') value = false;
+      if (typeof value === 'number') value = value > 0;
+      if (typeof value === 'number') value = value < 0;
+      if (typeof value === 'string') value = value.length > 0;
+      if (value === null || value === undefined) value = false;
+      if(typeof value !== "boolean") value = Boolean(value);
     }
 
     if (typeof value !== 'boolean') {

@@ -13,6 +13,8 @@ export * from "./libs/shapes/number-shape";
 export * from "./libs/shapes/object-shape";
 export * from "./libs/shapes/record-shape";
 export * from "./libs/shapes/string-shape";
+export * from "./libs/shapes/any-shape";
+export * from "./libs/shapes/union-shape";
 export * from "./libs/driver";
 export * from "./libs/drivers";
 import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type InferType, type ExpandRecursively, type DeepPartial } from "./libs/types";
@@ -134,7 +136,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns Operation result (type depends on driver's async flag)
      * @throws If the path is invalid or points to a non-root property
      */
-    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: RecursiveConfigJSResult<Shapes, Path>) {
+    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: ExpandRecursively<DeepPartial<RecursiveConfigJSResult<Shapes, Path>>>) {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -148,7 +150,15 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         if ((current instanceof BaseShape)) {
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
-        return this.driver.insert.bind(this)(current, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
+
+        const filtered = Object.keys(values).reduce((acc:any, key) => {
+            if (key in current) {
+                acc[key] = current[key];
+            }
+            return acc;
+        }, {} as Partial<typeof this.shapes>);
+
+        return this.driver.insert.bind(this)(filtered, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
     }
 
     /**

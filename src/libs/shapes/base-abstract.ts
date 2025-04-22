@@ -86,7 +86,10 @@ export abstract class BaseShapeAbstract<T> {
             fn: fn as any,
             message: opts.message ?? "Invalid transform",
             code: opts.code ?? 'TRANSFORM_ERROR',
-            meta: opts.meta,
+            meta: {
+                ...opts.meta,
+                message:opts.message ?? "Invalid transform"
+            },
             opts
         });
     
@@ -155,6 +158,7 @@ export abstract class BaseShapeAbstract<T> {
                         message: operationOpts?.message ?? op.message ?? (typeof err == "string" ? err as string : err.message),
                         value: currentValue,
                         meta: {
+                            message: operationOpts?.message ?? op.message ?? (typeof err == "string" ? err as string : err.message),
                             ...this._getConfig(),
                             ...op.meta ?? {},
                             ...operationOpts?.meta ?? {}
@@ -171,6 +175,7 @@ export abstract class BaseShapeAbstract<T> {
                         message: operationOpts?.message ?? op.message,
                         value: currentValue,
                         meta: {
+                            message: operationOpts?.message ?? op.message,
                             ...this._getConfig(),
                             ...op.meta ?? {},
                             ...operationOpts?.meta ?? {}

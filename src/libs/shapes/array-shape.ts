@@ -14,7 +14,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
   }
 
   parse(value: unknown, opts?: COptionsConfig): Array<InferType<T>> {
-    if (typeof value === "undefined" && this._default) value = this._default;
+    if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
 
@@ -39,6 +39,9 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
               path: `${this._prop}[${index}]`,
               message: `Expected ${JSON.stringify(this._shape)}`,
               value: item,
+              meta: {
+                expected: JSON.stringify(this._shape)
+              },
               ...opts
             });
           }
@@ -110,9 +113,9 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
     );
   }
 
-  includes(element: InferType<T>, opts: COptionsConfig = {}): this {
+  includes(element: InferType<T>, opts: COptionsConfig = {}) {
     return this.refine(
-      (arr) => arr.includes(element),
+      (arr:any[]) => arr.includes(element as never),
       opts.message ?? `Array must include ${JSON.stringify(element)}`,
       opts.code ?? 'MISSING_ELEMENT',
       opts.meta ?? { element }
@@ -126,5 +129,9 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
       opts.code ?? 'FORBIDDEN_ELEMENT',
       opts.meta ?? { element }
     );
+  }
+
+  onion<U extends BaseShape<any>>(shape: U): ArrayShape<U> {
+    return new ArrayShape(shape);
   }
 }

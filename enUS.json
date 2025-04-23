@@ -1,7 +1,8 @@
 {
     "==== CaelJS Language Codes ====": "Caeljs Codes, used in i18 languages.",
-    "NOT_OBJECT": "Expected an object",
+    "NOT_OBJECT": "Expected object",
     "INVALID_PROPERTY": "Invalid property \"{property}\"",
+    "NOT_NULLABLE":"Property\"{property}\" is not nullable",
     "INVALID_PROPERTY_SHAPE":"Property \"{property}\" has invalid shape",
     "INVALID_PROPERTY_NAMES":"Some property names are invalid",
     "INVALID_PROPERTY_VALUES":"Some property values are invalid",

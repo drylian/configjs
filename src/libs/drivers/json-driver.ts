@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
-import { BaseShapeAbstract } from '../shapes/base-abstract';
+import { AbstractShape } from '../shapes/abstract-shape';
 import { getShapeDefault } from '../functions';
 import { StringShape } from '../shapes/string-shape';
 import { NumberShape } from '../shapes/number-shape';
@@ -9,7 +9,7 @@ import { ArrayShape } from '../shapes/array-shape';
 import { BooleanShape } from '../shapes/boolean-shape';
 import { RecordShape } from '../shapes/record-shape';
 import { ObjectShape } from '../shapes/object-shape';
-import { BaseShape, type ConfigJS, type InferType } from '../../ConfigJS';
+import { BaseShape, type ConfigJS, type InferShapeType } from '../../ConfigJS';
 
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, any>) => {
     const cached_at = Number(instance.cached_at.toString());
@@ -140,7 +140,7 @@ export const jsonDriver = new ConfigJSDriver({
     },
 
     //@ts-expect-error additional contents in respo
-    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferType<BaseShape<any>>>, updates: Record<string, any>) {
+    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferShapeType<BaseShape<any>>>, updates: Record<string, any>) {
         if (!values || typeof values !== 'object') {
             console.warn('[JSONDriver] Insert requires an object of values');
             return false;
@@ -188,7 +188,7 @@ export const jsonDriver = new ConfigJSDriver({
         for (const key in object_shape) {
             const shape_or_object = object_shape[key];
 
-            if (shape_or_object instanceof BaseShapeAbstract) {
+            if (shape_or_object instanceof AbstractShape) {
                 if (!this.driver.supported_check.bind(this)(shape_or_object)) {
                     console.warn(`[JSONDriver] Unsupported shape type for key: ${key}`);
                     continue;

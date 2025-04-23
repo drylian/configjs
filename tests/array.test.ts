@@ -129,8 +129,8 @@ describe("ArrayShape", () => {
     try {
       schema.parse([{ name: "John", age: "30" }]);
     } catch (error) {
-      expect(error.message).toContain("Multiple validation errors");
-      expect(error.path).toBe("_unconfigured_property[0]");
+      expect(error.message).toContain("Expected a number");
+      expect(error.path).toBe("age");
     }
   });
 

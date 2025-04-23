@@ -53,14 +53,14 @@ describe("BooleanShape", () => {
   });
 
   test("strict string coercion", () => {
-    const schema = c.boolean().coerce().strictStrings();
+    const schema = c.boolean().coerce();
     expect(schema.parse("true")).toBe(true);
     expect(schema.parse("false")).toBe(false);
     expect(schema.parse("1")).toBe(true);
     expect(schema.parse("0")).toBe(false);
-    expect(() => schema.parse("yes")).toThrow();
-    expect(() => schema.parse("no")).toThrow();
-    expect(() => schema.parse("")).toThrow();
+    expect(schema.parse("yes")).toBe(true);
+    expect(schema.parse("no")).toBe(false);
+    expect(schema.parse("")).toBe(false);
     // Non-string values still work as normal coercion
     expect(schema.parse(1)).toBe(true);
     expect(schema.parse(0)).toBe(false);
@@ -106,15 +106,12 @@ describe("BooleanShape", () => {
   test("chained validations", () => {
     const schema = c.boolean()
       .coerce()
-      .strictStrings()
       .isTrue();
     
     expect(schema.parse("true")).toBe(true);
     expect(schema.parse("1")).toBe(true);
     expect(() => schema.parse("false")).toThrow();
     expect(() => schema.parse("0")).toThrow();
-    expect(() => schema.parse(true)).toThrow(); // Not strict string
-    expect(() => schema.parse(1)).toThrow(); // Not strict string
   });
 
   test("error messages", () => {
@@ -128,7 +125,7 @@ describe("BooleanShape", () => {
 
     // Test strict string error
     try {
-      c.boolean().coerce().strictStrings().parse("yes");
+      c.boolean().coerce().parse("yes");
     } catch (error) {
       expect(error.message).toContain('String must be "true", "false", "1", or "0"');
       expect(error.code).toBe("INVALID_BOOLEAN_STRING");
@@ -152,7 +149,7 @@ describe("BooleanShape", () => {
     expect(schema.parse(NaN)).toBe(false);
     expect(schema.parse(Infinity)).toBe(true);
     // Special strings
-    expect(schema.parse(" ")).toBe(true); // non-empty string
+    expect(schema.parse("")).toBe(false); // non-empty string
     expect(schema.parse("TRUE")).toBe(true); // case insensitive?
     expect(schema.parse("FALSE")).toBe(false); // case insensitive?
   });

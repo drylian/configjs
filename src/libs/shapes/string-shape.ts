@@ -44,7 +44,8 @@ export class StringShape extends BaseShape<string> {
         code: 'NOT_STRING',
         path: p || '',
         message: 'Expected a string',
-        value: v
+        value: v,
+        key:this._key,
       }), value);
     }
 

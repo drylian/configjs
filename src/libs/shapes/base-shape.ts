@@ -1,9 +1,9 @@
-import { BaseShapeAbstract } from "./base-abstract";
+import { AbstractShape } from "./abstract-shape";
 import { ConfigShapeError, type ErrorCreator } from "../error";
 import type { COptionsConfig } from "../types";
-import { type ExpandRecursively } from '../types';
+import { type ShapeViewer } from '../types';
 
-export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
+export abstract class BaseShape<T> extends AbstractShape<T> {
   abstract readonly _type: string;
 
   protected createError(creator: ErrorCreator, value: unknown, path = '', opts?: COptionsConfig): never {
@@ -28,7 +28,7 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
       ...this._getConfig(),
       type: this._type,
     };
-    return result as ExpandRecursively<typeof result> ;
+    return result as ShapeViewer<typeof result>;
   }
 
   parseWithDefault(value: unknown): T {
@@ -45,8 +45,9 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         path: `${this._key} - (prop: '${this._prop}')`,
         message: `The property '${this._prop}' is marked as required but was not provided. Please define this value before proceeding.`,
         value,
+        key: this._key,
         meta: {
-          ...this.conf()as object,
+          ...this.conf() as object,
         }
       });
     }
@@ -67,11 +68,12 @@ export abstract class BaseShape<T> extends BaseShapeAbstract<T> {
         path: this._prop !== '_unconfigured_property'
           ? `${path ? `${path}.` : ''}${this._prop}`
           : path,
+        key: this._key,
         message: (error instanceof Error ? error.message : 'Unknown error'),
         value,
         meta: {
           ...this.conf() as object,
-          message:(error instanceof Error ? error.message : 'Unknown error')
+          message: (error instanceof Error ? error.message : 'Unknown error')
         }
       });
     }

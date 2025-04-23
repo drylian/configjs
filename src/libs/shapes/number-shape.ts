@@ -38,6 +38,7 @@ export class NumberShape extends BaseShape<number> {
             message: opts?.message ?? 'Expected a number',
             path: path || '',
             value,
+            key:this._key,
             meta: opts?.meta
           }), value);
         }
@@ -49,6 +50,7 @@ export class NumberShape extends BaseShape<number> {
           message: opts?.message ?? 'Expected a number',
           path: path || '',
           value,
+          key:this._key,
           meta: opts?.meta
         }), value);
       }
@@ -60,6 +62,7 @@ export class NumberShape extends BaseShape<number> {
         message: opts?.message ?? 'Expected a number',
         path: path || '',
         value,
+        key:this._key,
         meta: opts?.meta
       }), value);
     }

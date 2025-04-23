@@ -1,7 +1,7 @@
-import { ConfigShapeError, type ErrorCreator } from '../error';
+import { ConfigShapeError } from '../error';
 import type { COptionsConfig, GetConfigType } from '../types';
 
-export abstract class BaseShapeAbstract<T> {
+export abstract class AbstractShape<T> {
     public _default?: T;
     public _pretransforms: any[] = [];
     public _prop = "_unconfigured_property";
@@ -33,8 +33,7 @@ export abstract class BaseShapeAbstract<T> {
 
     abstract parse(value: unknown): T;
 
-    public safeParse(value: unknown): 
-        { value: T, success: boolean, error: ConfigShapeError | undefined } {
+    public safeParse(value: unknown): { value: T, success: boolean, error: ConfigShapeError | undefined } {
         try {
             const result = this.parse(value);
             return {
@@ -65,12 +64,12 @@ export abstract class BaseShapeAbstract<T> {
         return this;
     }
 
-    optional(): this & BaseShapeAbstract<T | undefined> {
+    optional(): AbstractShape<T | undefined> & Omit<this, keyof AbstractShape<any>> {
         this._optional = true;
         return this as never;
     }
 
-    nullable(): this & BaseShapeAbstract<T | null> {
+    nullable(): AbstractShape<T | undefined> & Omit<this, keyof AbstractShape<any>> {
         this._nullable = true;
         return this as never;
     }
@@ -78,9 +77,9 @@ export abstract class BaseShapeAbstract<T> {
     transform<U>(
         fn: (value: T) => U,
         opts: COptionsConfig = {}
-    ): BaseShapeAbstract<U> {
+    ): AbstractShape<T | undefined> & Omit<this, keyof AbstractShape<any>> {
         const newShape = this._clone();
-        
+
         newShape._operations.unshift({
             type: 'transform',
             fn: fn as any,
@@ -88,13 +87,13 @@ export abstract class BaseShapeAbstract<T> {
             code: opts.code ?? 'TRANSFORM_ERROR',
             meta: {
                 ...opts.meta,
-                message:opts.message ?? "Invalid transform"
+                message: opts.message ?? "Invalid transform"
             },
             opts
         });
-    
+
         newShape._pretransforms = [...this._pretransforms];
-    
+
         return newShape as never;
     }
 
@@ -144,17 +143,19 @@ export abstract class BaseShapeAbstract<T> {
 
         for (const op of this._operations) {
             const operationOpts = op.opts;
-            
+
             if (op.type === 'transform') {
                 try {
                     currentValue = op.fn(currentValue);
                 } catch (e) {
                     const err = e as Error | string;
+                    const prop = this._prop !== '_unconfigured_property'
+                        ? `${path ? `${path}.` : ''}${this._prop}`
+                        : path;
                     throw new ConfigShapeError({
                         code: operationOpts?.code ?? op.code ?? (typeof err == "object" ? (err as Error).name : 'TRANSFORM_ERROR'),
-                        path: this._prop !== '_unconfigured_property'
-                            ? `${path ? `${path}.` : ''}${this._prop}`
-                            : path,
+                        path: prop,
+                        key: prop,
                         message: operationOpts?.message ?? op.message ?? (typeof err == "string" ? err as string : err.message),
                         value: currentValue,
                         meta: {
@@ -167,11 +168,13 @@ export abstract class BaseShapeAbstract<T> {
                 }
             } else if (op.type === 'refine') {
                 if (!op.fn(currentValue)) {
+                    const prop = this._prop !== '_unconfigured_property'
+                    ? `${path ? `${path}.` : ''}${this._prop}`
+                    : path;
                     throw new ConfigShapeError({
                         code: operationOpts?.code ?? op.code ?? 'VALIDATION_ERROR',
-                        path: this._prop !== '_unconfigured_property'
-                            ? `${path ? `${path}.` : ''}${this._prop}`
-                            : path,
+                        path: prop,
+                        key:prop,
                         message: operationOpts?.message ?? op.message,
                         value: currentValue,
                         meta: {
@@ -188,16 +191,16 @@ export abstract class BaseShapeAbstract<T> {
         return currentValue;
     }
 
-    protected _getConfig():GetConfigType<this> {
+    protected _getConfig(): GetConfigType<this> {
         const config = {} as GetConfigType<this>;
-        
+
         for (const key in this) {
             if (!this.hasOwnProperty(key)) continue;
             if (typeof this[key] === 'function' || key.startsWith('__')) continue;
             const configKey = key.startsWith('_') ? key.substring(1) : key;
             config[configKey as never] = this[key as never];
         }
-        
+
         return config;
     }
 }

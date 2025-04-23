@@ -1,9 +1,9 @@
 import { BaseShape } from './base-shape';
-import { type COptionsConfig, type InferType } from '../types';
-import { ConfigShapeError, type ErrorCreator } from '../error';
+import { type COptionsConfig, type InferShapeType, type ShapeViewer } from '../types';
+import { ConfigShapeError } from '../error';
 
 export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>>
-  extends BaseShape<Record<K, InferType<V>>> {
+  extends BaseShape<Record<K, InferShapeType<V>>> {
   public readonly _type = "record";
 
   constructor(
@@ -13,17 +13,17 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
     super();
   }
 
-  getDefaults(): Record<K, InferType<V>> {
+  getDefaults(): ShapeViewer<Record<K, InferShapeType<V>>> {
     const result: Record<any, any> = {
       ...(this._default ?? {})
     };
 
     if (typeof this._default !== 'undefined') {
-      return this._default;
+      return this._default as never;
     }
 
     let key: K = this._keyShape._default as K;
-    let value: InferType<V>;
+    let value: InferShapeType<V>;
 
     if (this._valueShape instanceof BaseShape) {
       if (typeof this._valueShape._default !== 'undefined') {
@@ -31,17 +31,18 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
       } else if ('getDefaults' in this._valueShape) {
         value = (this._valueShape as any).getDefaults();
       } else {
-        value = {} as InferType<V>;
+        value = {} as InferShapeType<V>;
       }
     } else {
       value = this._valueShape;
     }
 
     if (key) result[key] = value;
-    return result;
+    return result  as never;
   }
 
-  parse(value: unknown, opts?: COptionsConfig): Record<K, InferType<V>> {
+  //@ts-expect-error ignore
+  parse(value: unknown, opts?: COptionsConfig): ShapeViewer<Record<K, InferShapeType<V>>> {
     if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
@@ -77,7 +78,7 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
       }
     }
 
-    return this._checkImportant(this._applyOperations(result, this._key));
+    return this._checkImportant(this._applyOperations(result, this._key)) as never;
   }
 
   minProperties(min: number, opts: COptionsConfig = {}): this {
@@ -125,7 +126,7 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
     );
   }
 
-  propertyValue(key: K, validator: (value: InferType<V>) => boolean, opts: COptionsConfig = {}): this {
+  propertyValue(key: K, validator: (value: InferShapeType<V>) => boolean, opts: COptionsConfig = {}): this {
     return this.refine(
       (val) => key in val && validator(val[key]),
       opts.message ?? `Property "${String(key)}" is invalid`,

@@ -1,8 +1,8 @@
-import type { COptionsConfig, InferType } from "../types";
-import { ConfigShapeError, type ErrorCreator } from "../error";
+import type { COptionsConfig, InferShapeType } from "../types";
+import { ConfigShapeError } from "../error";
 import { BaseShape } from "./base-shape";
 
-export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferType<T>>> {
+export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferShapeType<T>>> {
   public readonly _type = "array";
   public _minLength?: number;
   public _maxLength?: number;
@@ -13,7 +13,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
     super();
   }
 
-  parse(value: unknown, opts?: COptionsConfig): Array<InferType<T>> {
+  parse(value: unknown, opts?: COptionsConfig): Array<InferShapeType<T>> {
     if (typeof value === "undefined" && typeof this._default !== "undefined") value = this._default;
     if (typeof value === "undefined" && this._optional) return undefined as never;
     if (value === null && this._nullable) return null as never;
@@ -113,7 +113,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
     );
   }
 
-  includes(element: InferType<T>, opts: COptionsConfig = {}) {
+  includes(element: InferShapeType<T>, opts: COptionsConfig = {}) {
     return this.refine(
       (arr:any[]) => arr.includes(element as never),
       opts.message ?? `Array must include ${JSON.stringify(element)}`,
@@ -122,7 +122,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferT
     );
   }
 
-  excludes(element: InferType<T>, opts: COptionsConfig = {}): this {
+  excludes(element: InferShapeType<T>, opts: COptionsConfig = {}): this {
     return this.refine(
       (arr) => !arr.includes(element),
       opts.message ?? `Array must not include ${JSON.stringify(element)}`,

@@ -4,15 +4,9 @@ import { BaseShape } from "./base-shape";
 export class BooleanShape extends BaseShape<boolean> {
   public readonly _type = "boolean";
   private _coerce = false;
-  private _strictStrings = false;
 
   coerce(): this {
     this._coerce = true;
-    return this;
-  }
-
-  strictStrings(): this {
-    this._strictStrings = true;
     return this;
   }
 
@@ -22,25 +16,35 @@ export class BooleanShape extends BaseShape<boolean> {
     if (value === null && this._nullable) return null as never;
 
     if (this._coerce) {
-      if (this._strictStrings && typeof value === 'string') {
-        if (typeof value == "string" && value.toLowerCase() === 'true' || value === '1') value = true;
-        if (typeof value == "string" && value.toLowerCase() === 'false' || value === '0') value = false;
-        this.createError((value: unknown, path?: string) => ({
-          code: opts?.code ?? 'INVALID_BOOLEAN_STRING',
-          message: opts?.message ?? 'String must be "true", "false", "1", or "0"',
-          path: path || '',
-          value,
-          meta: opts?.meta
-        }), value);
+      // Coerce strings with case insensitivity
+      if (typeof value === 'string') {
+        const normalized = value.toLowerCase().trim();
+        // Loose string coercion
+        if (['yes', 'y', 's', '1', 'true'].includes(normalized)) {
+          value = true;
+        } else if (['no', 'n', '0', 'false'].includes(normalized)) {
+          value = false;
+        } else if (!isNaN(Number(normalized))) {
+          value = Number(normalized) !== 0;
+        } else {
+          value = Boolean(value);
+        }
       }
-      if (typeof value === "number" && isNaN(value) ) value = false;
-      if (typeof value == "string" && value.toLowerCase() === 'true' || value === '1') value = true;
-      if (typeof value == "string" && value.toLowerCase() === 'false' || value === '0') value = false;
-      if (typeof value === 'number') value = value > 0;
-      if (typeof value === 'number') value = value < 0;
-      if (typeof value === 'string') value = value.length > 0;
-      if (value === null || value === undefined) value = false;
-      if(typeof value !== "boolean") value = Boolean(value);
+
+      // Numbers: coerce NaN and zero to false
+      else if (typeof value === "number") {
+        value = !isNaN(value) && value !== 0;
+      }
+
+      // null/undefined -> false
+      else if (value === null || value === undefined) {
+        value = false;
+      }
+
+      // objects, symbols, other types
+      else {
+        value = Boolean(value);
+      }
     }
 
     if (typeof value !== 'boolean') {

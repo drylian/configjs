@@ -1,10 +1,8 @@
 import { BaseShape } from './base-shape';
-import type { COptionsConfig } from '../types';
+import type { COptionsConfig, InferUnionType, PrimitiveShapes } from '../types';
 import { ConfigShapeError } from '../error';
 
-export class UnionShape<T extends BaseShape<any>[]> extends BaseShape<
-  T[number] extends BaseShape<infer U> ? U : never
-> {
+export class UnionShape<T extends PrimitiveShapes[]> extends BaseShape<InferUnionType<T>> {
   public readonly _type = "union";
 
   constructor(private readonly shapes: T) {
@@ -25,7 +23,8 @@ export class UnionShape<T extends BaseShape<any>[]> extends BaseShape<
             code: 'UNKNOWN_ERROR',
             message: String(error),
             path: this._prop,
-            value
+            value,
+            key:this._key,
           }));
         }
       }
@@ -36,6 +35,7 @@ export class UnionShape<T extends BaseShape<any>[]> extends BaseShape<
       message: opts?.message ?? 'Value did not match any union member',
       path: path || '',
       value,
+      key:this._key,
       meta: {
         ...opts?.meta,
         errors: errors.map(err => ({

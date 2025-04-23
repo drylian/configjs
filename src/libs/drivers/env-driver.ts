@@ -6,9 +6,9 @@ import { EnumShape } from "../shapes/enum-shape";
 import { ArrayShape } from "../shapes/array-shape";
 import { BooleanShape } from "../shapes/boolean-shape";
 import { BaseShape } from "../shapes/base-shape";
-import { BaseShapeAbstract } from "../shapes/base-abstract";
+import { AbstractShape } from "../shapes/abstract-shape";
 import { getShapeDefault } from "../functions";
-import type { InferType } from "../types";
+import type { InferShapeType } from "../types";
 import { ConfigJS } from '../../ConfigJS';
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
@@ -190,7 +190,7 @@ export const envDriver = new ConfigJSDriver({
     },
 
     //@ts-expect-error
-    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferType<BaseShape<any>>>, updates: Record<string, any>) {
+    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferShapeType<BaseShape<any>>>, updates: Record<string, any>) {
         if (!values || typeof values !== 'object') {
             console.warn('[EnvDriver] Insert requires an object of values');
             return false;
@@ -256,7 +256,7 @@ export const envDriver = new ConfigJSDriver({
         for (const key in object_shape) {
             const shape_or_object = object_shape[key];
 
-            if (shape_or_object instanceof BaseShapeAbstract) {
+            if (shape_or_object instanceof AbstractShape) {
                 if (!this.driver.supported_check.bind(this)(shape_or_object)) {
                     console.warn(`[EnvDriver] Unsupported shape type for key: ${key}`);
                     continue;

@@ -8,7 +8,7 @@ import { EnumShape } from './shapes/enum-shape';
 import { AnyShape } from './shapes/any-shape';
 import { UnionShape } from './shapes/union-shape';
 import type { BaseShape } from './shapes/base-shape';
-import type { InferType } from "./types"
+import type { InferShapeType } from "./types"
 //@ts-expect-error typed declaration diff
 declare function Enum<const T extends readonly (string | number | boolean)[]>(
   keys: T
@@ -94,9 +94,9 @@ export const c = {
   // =====================
   // OBJECT UTILITIES
   // =====================
-  pick: <T extends ObjectShape<any>, K extends keyof InferType<T>>(shape: T, keys: K[]) =>
+  pick: <T extends ObjectShape<any>, K extends keyof InferShapeType<T>>(shape: T, keys: K[]) =>
     shape.pick(keys),
-  omit: <T extends ObjectShape<any>, K extends keyof InferType<T>>(shape: T, keys: K[]) =>
+  omit: <T extends ObjectShape<any>, K extends keyof InferShapeType<T>>(shape: T, keys: K[]) =>
     shape.omit(keys),
   merge: <T extends ObjectShape<any>, U extends ObjectShape<any>>(shape1: T, shape2: U) =>
     shape1.merge(shape2),
@@ -143,7 +143,7 @@ export const c = {
   // LOGICAL OPERATORS
   // =====================
   and: <T extends BaseShape<any>, U extends BaseShape<any>>(shape1: T, shape2: U) => 
-    new AnyShape<InferType<T> & InferType<U>>().refine(
+    new AnyShape<InferShapeType<T> & InferShapeType<U>>().refine(
       v => shape1.safeParse(v).success && shape2.safeParse(v).success,
       'Must satisfy both schemas'
     ),
@@ -191,7 +191,7 @@ export const c = {
     new AnyShape<T>().refine(validator, message ?? 'Custom validation failed'),
   refine: <T extends BaseShape<any>>(
     shape: T,
-    predicate: (value: InferType<T>) => boolean,
+    predicate: (value: InferShapeType<T>) => boolean,
     message: string,
     code?: string
   ) => shape.refine(predicate, message, code),

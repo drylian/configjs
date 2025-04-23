@@ -2,6 +2,7 @@
 export interface ConfigShapeErrorConstructor {
     code: string;
     path?: string;
+    key:string;
     message: string;
     value: unknown;
     meta?: Record<string, unknown>;
@@ -20,7 +21,11 @@ export class ConfigShapeError extends Error {
     this.code = options.code;
     this.path = options.path || '';
     this.value = options.value;
-    this.meta = options.meta;
+    this.meta = {
+      ...options,
+      property:options.key,
+      ...options.meta,
+    };
   }
 
   toJSON() {

@@ -53,6 +53,7 @@ export class BooleanShape extends BaseShape<boolean> {
         message: opts?.message ?? 'Expected a boolean',
         path: path || '',
         value,
+        key:this._key,
         meta: opts?.meta
       }), value);
     }

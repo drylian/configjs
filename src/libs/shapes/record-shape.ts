@@ -53,6 +53,7 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         message: opts?.message ?? 'Expected an object',
         path: path || '',
         value,
+        key:this._key,
         meta: opts?.meta
       }), value);
     }
@@ -73,6 +74,7 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
           message: opts?.message ?? `Invalid property "${key}"`,
           path: path || '',
           value,
+          key:this._key,
           meta: opts?.meta ?? { property: key }
         }), input[key]);
       }

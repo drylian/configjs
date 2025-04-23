@@ -20,7 +20,8 @@ export class EnumShape<T extends (string | number | boolean)> extends BaseShape<
         path: path || "",
         code: opts?.code ?? 'INVALID_ENUM_VALUE',
         message: opts?.message ?? `Value must be one of: ${this._values.join(', ')}`,
-        meta: opts?.meta ?? { validValues: this._values.join(', ') }
+        meta: opts?.meta ?? { validValues: this._values.join(', ') },
+        key:this._key,
       }),
         value
       );

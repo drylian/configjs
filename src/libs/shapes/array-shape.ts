@@ -24,6 +24,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferS
         message: opts?.message ?? 'Expected an array',
         path: path || '',
         value,
+        key:this._key,
         meta: opts?.meta
       }), value);
     }
@@ -39,6 +40,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferS
               path: `${this._prop}[${index}]`,
               message: `Expected ${JSON.stringify(this._shape)}`,
               value: item,
+              key:this._key,
               meta: {
                 expected: JSON.stringify(this._shape)
               },
@@ -56,6 +58,7 @@ export class ArrayShape<T extends BaseShape<any>> extends BaseShape<Array<InferS
           message: opts?.message ?? `Invalid array element at index ${index}`,
           path: path || '',
           value,
+          key:this._key,
           meta: opts?.meta ?? { index }
         }), item);
       }

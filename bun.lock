@@ -4,7 +4,7 @@
     "": {
       "name": "config-js",
       "dependencies": {
-        "@caeljs/tsh": "^1.0.1",
+        "@caeljs/tsh": "^1.0.3",
       },
       "devDependencies": {
         "@types/bun": "^1.2.10",
@@ -16,7 +16,7 @@
     },
   },
   "packages": {
-    "@caeljs/tsh": ["@caeljs/tsh@1.0.2", "", {}, "sha512-pM3nxIhcCBnTeznAPijV6s/0ReQTL6enhnGzktNkCXfS10jdEaU66y0z09wUX7cnn4UJxSbvC9eTP1DcyxiJlw=="],
+    "@caeljs/tsh": ["@caeljs/tsh@1.0.3", "", {}, "sha512-o73UgoivA1/zF4pUB1KRqIiwztaGSIt/Ch7zUIGipgzsCcmaCoag1eSjNViKxnjb9qJpue5kUlOaiHPI0iUi8g=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.1", "", { "os": "aix", "cpu": "ppc64" }, "sha512-kfYGy8IdzTGy+z0vFGvExZtxkFlA4zAxgKEahG9KE1ScBjpQnFsNOX8KTU5ojNru5ed5CVoJYXFtoxaq5nFbjQ=="],
 

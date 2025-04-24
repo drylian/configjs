@@ -1,4 +1,4 @@
-import type { InferShapeType, TshViewer } from "@caeljs/tsh";
+import type { DeepPartialObjShape, InferShapeType, TshViewer } from "@caeljs/tsh";
 import { processShapes } from "./libs/functions";
 export * from "./libs/types";
 export * from "./libs/functions";
@@ -6,7 +6,7 @@ export * from "./libs/driver";
 export * from "./libs/drivers";
 import * as c from "./shapes";
 export { c };
-import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type ConfigDeepPartial } from "./libs/types";
+import { type AnyConfigDriver, type ConfigJSOptions, type ConfigJSPartials, type ConfigJSPaths, type ConfigJSResolver, type ConfigJSRoots, type ConfigJSTree } from "./libs/types";
 import { BaseShape } from "@caeljs/tsh";
 
 /**
@@ -16,17 +16,17 @@ import { BaseShape } from "@caeljs/tsh";
  * @template ConfigDriver - The driver type used for configuration storage
  * @template Shapes - The nested shapes structure defining the configuration schema
  */
-export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, Shapes extends AnyConfigJSNestedShapes> {
+export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, Shapes extends ConfigJSOptions> {
     /** Internal cache */
     #cache: any;
-    
+
     /**
      * Gets the cached raw data from the driver
      */
     public get cached() {
         return this.#cache;
     };
-    
+
     /**
      * Sets the cached raw data and updates the cache timestamp
      */
@@ -34,17 +34,17 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         this.#cache = data;
         this.cached_at = Date.now();
     }
-    
+
     /**
      * Timestamp of the last cache update
      */
     public cached_at = 0;
-    
+
     /**
      * Indicates whether the driver operates asynchronously
      */
     public readonly async: ConfigDriver['async'];
-    
+
     /**
      * The shapes structure defining the configuration schema
      */
@@ -116,7 +116,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      */
     public get<Path extends ConfigJSPaths<Shapes>>(path: Path) {
         const schema = this.getSchema(path);
-        return this.driver.get.bind(this)(schema as never) as ConfigJSResult<ConfigDriver['async'], GetValueType<Shapes, Path>>;
+        return this.driver.get.bind(this)(schema as never) as ConfigJSResolver<ConfigDriver['async'], ConfigJSTree<Shapes>[Path]>;
     }
 
     /**
@@ -126,7 +126,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns Operation result (type depends on driver's async flag)
      * @throws If the path is invalid or points to a non-root property
      */
-    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: TshViewer<ConfigDeepPartial<RecursiveConfigJSResult<Shapes, Path>>>) {
+    public insert<Path extends ConfigJSRoots<Shapes>>(path: Path, values: TshViewer<ConfigJSPartials<ConfigJSTree<Shapes>[Path]>>) {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -141,14 +141,14 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
 
-        const filtered = Object.keys(values).reduce((acc:any, key) => {
+        const filtered = Object.keys(values).reduce((acc: any, key) => {
             if (key in current) {
                 acc[key] = current[key];
             }
             return acc;
         }, {} as Partial<typeof this.shapes>);
 
-        return this.driver.insert.bind(this)(filtered, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
+        return this.driver.insert.bind(this)(filtered, values as never) as ConfigJSResolver<ConfigDriver['async'], boolean>;
     }
 
     /**
@@ -157,7 +157,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns All values under the specified path (type depends on driver's async flag)
      * @throws If the path is invalid or points to a non-root property
      */
-    public root<Path extends ConfigJSRootPaths<Shapes>>(path: Path) {
+    public root<Path extends ConfigJSRoots<Shapes>>(path: Path) {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -171,7 +171,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         if ((current instanceof BaseShape)) {
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
-        return this.driver.root.bind(this)(current) as ConfigJSResult<ConfigDriver['async'], ConfigDeepPartial<RecursiveConfigJSResult<Shapes, Path>>>;
+        return this.driver.root.bind(this)(current) as ConfigJSResolver<ConfigDriver['async'], TshViewer<ConfigJSTree<Shapes>[Path]>>;
     }
 
     /**
@@ -179,9 +179,9 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns All configuration values (type depends on driver's async flag)
      */
     public all() {
-        return this.driver.root.bind(this)(this.shapes as never) as ConfigJSResult<
+        return this.driver.root.bind(this)(this.shapes as never) as ConfigJSResolver<
             ConfigDriver['async'],
-            InferShapeType<Shapes>
+            TshViewer<ConfigJSTree<Shapes>>
         >;
     }
 
@@ -190,15 +190,15 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @param values - Complete set of configuration values
      * @returns Operation result (type depends on driver's async flag)
      */
-    public define(values: TshViewer<ConfigDeepPartial<InferShapeType<Shapes>>>) {
-        const filtered = Object.keys(values).reduce((acc:any, key) => {
+    public define(values: TshViewer<ConfigJSPartials<ConfigJSTree<Shapes>>>) {
+        const filtered = Object.keys(values).reduce((acc: any, key) => {
             if (key in this.shapes) {
                 acc[key] = this.shapes[key];
             }
             return acc;
         }, {} as Partial<typeof this.shapes>);
-    
-        return this.driver.insert.bind(this)(filtered as never, values as never) as ConfigJSResult<ConfigDriver['async'], boolean>;
+
+        return this.driver.insert.bind(this)(filtered as never, values as never) as ConfigJSResolver<ConfigDriver['async'], boolean>;
     }
 
     /**
@@ -209,10 +209,10 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      */
     public set<Path extends ConfigJSPaths<Shapes>>(
         path: Path,
-        value: GetValueType<Shapes, Path>
+        value: ConfigJSTree<Shapes>[Path]
     ) {
         const schema = this.getSchema(path);
-        return this.driver.set.bind(this)(schema as never, value as never) as ConfigJSResult<ConfigDriver['async'], ConfigInferNestedType<Shapes>[Path]>;
+        return this.driver.set.bind(this)(schema as never, value as never) as ConfigJSResolver<ConfigDriver['async'], ConfigJSTree<Shapes>[Path]>;
     }
 
     /**

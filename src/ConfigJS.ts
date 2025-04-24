@@ -1,23 +1,13 @@
+import type { InferShapeType, TshViewer } from "@caeljs/tsh";
 import { processShapes } from "./libs/functions";
-import { BaseShape } from "./libs/shapes/base-shape";
-export * from "./libs/factory";
-export * from "./libs/error";
 export * from "./libs/types";
 export * from "./libs/functions";
-export * from "./libs/shapes/array-shape";
-export * from "./libs/shapes/abstract-shape";
-export * from "./libs/shapes/base-shape";
-export * from "./libs/shapes/boolean-shape";
-export * from "./libs/shapes/enum-shape";
-export * from "./libs/shapes/number-shape";
-export * from "./libs/shapes/object-shape";
-export * from "./libs/shapes/record-shape";
-export * from "./libs/shapes/string-shape";
-export * from "./libs/shapes/any-shape";
-export * from "./libs/shapes/union-shape";
 export * from "./libs/driver";
 export * from "./libs/drivers";
-import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type InferShapeType, type ShapeViewer, type ConfigDeepPartial } from "./libs/types";
+import * as c from "./shapes";
+export { c };
+import { type AnyConfigDriver, type AnyConfigJSNestedShapes, type ConfigJSPaths, type ConfigJSResult, type GetValueType, type ConfigInferNestedType, type ConfigJSRootPaths, type RecursiveConfigJSResult, type ConfigDeepPartial } from "./libs/types";
+import { BaseShape } from "@caeljs/tsh";
 
 /**
  * Configuration management class that provides a type-safe interface
@@ -126,7 +116,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      */
     public get<Path extends ConfigJSPaths<Shapes>>(path: Path) {
         const schema = this.getSchema(path);
-        return this.driver.get.bind(this)(schema) as ConfigJSResult<ConfigDriver['async'], GetValueType<Shapes, Path>>;
+        return this.driver.get.bind(this)(schema as never) as ConfigJSResult<ConfigDriver['async'], GetValueType<Shapes, Path>>;
     }
 
     /**
@@ -136,7 +126,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns Operation result (type depends on driver's async flag)
      * @throws If the path is invalid or points to a non-root property
      */
-    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: ShapeViewer<ConfigDeepPartial<RecursiveConfigJSResult<Shapes, Path>>>) {
+    public insert<Path extends ConfigJSRootPaths<Shapes>>(path: Path, values: TshViewer<ConfigDeepPartial<RecursiveConfigJSResult<Shapes, Path>>>) {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -200,7 +190,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @param values - Complete set of configuration values
      * @returns Operation result (type depends on driver's async flag)
      */
-    public define(values: ShapeViewer<ConfigDeepPartial<InferShapeType<Shapes>>>) {
+    public define(values: TshViewer<ConfigDeepPartial<InferShapeType<Shapes>>>) {
         const filtered = Object.keys(values).reduce((acc:any, key) => {
             if (key in this.shapes) {
                 acc[key] = this.shapes[key];
@@ -222,7 +212,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         value: GetValueType<Shapes, Path>
     ) {
         const schema = this.getSchema(path);
-        return this.driver.set.bind(this)(schema, value as never) as ConfigJSResult<ConfigDriver['async'], ConfigInferNestedType<Shapes>[Path]>;
+        return this.driver.set.bind(this)(schema as never, value as never) as ConfigJSResult<ConfigDriver['async'], ConfigInferNestedType<Shapes>[Path]>;
     }
 
     /**
@@ -232,7 +222,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      */
     public del<Path extends ConfigJSPaths<Shapes>>(path: Path) {
         const schema = this.getSchema(path);
-        return this.driver.del.bind(this)(schema);
+        return this.driver.del.bind(this)(schema as never);
     }
 
     /**
@@ -264,7 +254,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      */
     public has<Path extends ConfigJSPaths<Shapes>>(...ConfigJSPaths: Path[]) {
         const schemas = ConfigJSPaths.map(p => this.getSchema(p));
-        return this.driver.has.bind(this)(...schemas);
+        return this.driver.has.bind(this)(...schemas as never[]);
     }
 
     /**
@@ -288,7 +278,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             );
         };
 
-        return this.driver.load.bind(this)(getAllShapes(this.shapes));
+        return this.driver.load.bind(this)(getAllShapes(this.shapes) as never);
     }
 
     /**
@@ -306,6 +296,6 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             );
         };
 
-        return this.driver.save.bind(this)(getAllShapes(this.shapes));
+        return this.driver.save.bind(this)(getAllShapes(this.shapes) as never);
     }
 }

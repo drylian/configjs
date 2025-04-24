@@ -1,15 +1,8 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
-import { AbstractShape } from '../shapes/abstract-shape';
-import { getShapeDefault } from '../functions';
-import { StringShape } from '../shapes/string-shape';
-import { NumberShape } from '../shapes/number-shape';
-import { EnumShape } from '../shapes/enum-shape';
-import { ArrayShape } from '../shapes/array-shape';
-import { BooleanShape } from '../shapes/boolean-shape';
-import { RecordShape } from '../shapes/record-shape';
-import { ObjectShape } from '../shapes/object-shape';
-import { BaseShape, type ConfigJS, type InferShapeType } from '../../ConfigJS';
+import { type infer as InferShapeType, StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,BaseShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
+import { getShapeDefault } from '@caeljs/tsh';
+import type { ConfigJS } from '../../ConfigJS';
 
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, any>) => {
     const cached_at = Number(instance.cached_at.toString());
@@ -226,7 +219,7 @@ export const jsonDriver = new ConfigJSDriver({
             if (typeof rawValue == "undefined" && conf.save_default && (conf.default || "getDefaults" in shape)) {
                 this.set(conf.key, getShapeDefault(shape))
             }
-            shape._checkImportant(rawValue ?? getShapeDefault(shape))
+            ImportantCheck.bind(shape)(rawValue ?? getShapeDefault(shape))
         });
 
         return true;

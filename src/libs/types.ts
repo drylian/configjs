@@ -1,72 +1,10 @@
-import type { AbstractShape, BaseShape, ConfigJS, EnumShape } from "../ConfigJS";
-import type { AnyShape } from "./shapes/any-shape";
-import type { ArrayShape } from "./shapes/array-shape";
-import type { BooleanShape } from "./shapes/boolean-shape";
-import type { NumberShape } from "./shapes/number-shape";
-import type { ObjectShape } from "./shapes/object-shape";
-import type { RecordShape } from "./shapes/record-shape";
-import type { StringShape } from "./shapes/string-shape";
-import type { UnionShape } from "./shapes/union-shape";
 
-export type ShapeViewer<T> =
-  T extends null | undefined ? T :
-  T extends Array<infer E> ? Array<ShapeViewer<E>> :
-  T extends object ? { [K in keyof T]: ShapeViewer<T[K]> } : T;
-
-export type ObjShape<T extends Record<string, PrimitiveShapes>> = {
-  [K in keyof T]?: InferShapeType<T[K]>;
-};
-
-export type PartialObjShape<T extends Record<string, PrimitiveShapes>> = {
-  [K in keyof T]?: T[K] extends PrimitiveShapes ? T[K] : never
-};
-
-export type DeepPartialObjShape<T extends Record<string, PrimitiveShapes>> = {
-  [K in keyof T]?: T[K] extends Record<string, PrimitiveShapes>
-  ? DeepPartialObjShape<T[K]>
-  : T[K] extends PrimitiveShapes
-  ? T[K]
-  : never
-};
-
-export type PrimitiveShapes =
-  | StringShape
-  | NumberShape
-  | BooleanShape
-  | AnyShape<any>
-  | EnumShape<any>
-  | ArrayShape<any>
-  | ObjectShape<any>
-  | RecordShape<any, any>
-  | BaseShape<any>
-  | UnionShape<any>;
-
-export type COptionsConfig = { code?: string, message?: string, path?: string, meta?: Record<string, unknown> };
-export type inferType<T> = InferShapeType<T>;
-export type InferShapeType<T> =
-  T extends StringShape ? string :
-  T extends NumberShape ? number :
-  T extends BooleanShape ? boolean :
-  T extends AnyShape ? any :
-  T extends EnumShape<infer U> ? U :
-  T extends AbstractShape<infer U> ? U :
-  T extends ArrayShape<infer U> ? Array<InferShapeType<U>> :
-  T extends ObjectShape<infer U> ? { [K in keyof U]: InferShapeType<U[K]> } :
-  T extends RecordShape<string, infer V> ? Record<string, InferShapeType<V>> :
-  T extends RecordShape<infer K, infer V> ? Record<K, InferShapeType<V>> :
-  T extends UnionShape<infer U> ? InferUnionType<U> :
-  T extends readonly (infer U)[] ? ReadonlyArray<InferShapeType<U>> :
-  T extends (infer U)[] ? Array<InferShapeType<U>> :
-  T;
-
-export type InferUnionType<T extends PrimitiveShapes[]> =
-  T extends [infer First, ...infer Rest]
-  ? First extends PrimitiveShapes
-  ? InferShapeType<First> | (Rest extends PrimitiveShapes[] ? InferUnionType<Rest> : never)
-  : never
-  : never;
 
 /**  Config TYPES **/
+
+import type { InferShapeType } from "@caeljs/tsh";
+import type { AbstractShape, BaseShape, PrimitiveShapes } from "../shapes";
+import type { ConfigJS } from "../ConfigJS";
 
 export type ConfigDeepPartial<T> = {
   [K in keyof T]?: T[K] extends Function
@@ -75,6 +13,7 @@ export type ConfigDeepPartial<T> = {
       ? ConfigDeepPartial<T[K]>
       : T[K];
 };
+
 export type ConfigJSRootPaths<T> =
   T extends PrimitiveShapes
   ? never

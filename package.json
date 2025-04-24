@@ -59,6 +59,6 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@caeljs/tsh": "^1.0.3"
+    "@caeljs/tsh": "^1.0.4"
   }
 }

@@ -1,4 +1,4 @@
-import { t, TshShapeError, type InferShapeType, type TshViewer } from '@caeljs/tsh';
+import { t, TshShapeError, type InferShapeType, type inferType, type TshViewer } from '@caeljs/tsh';
 
 export function ImportantCheck<T>(this: BaseShape<any>, value: T): T {
     if ((typeof value === "undefined" || value === null) && this._important) {
@@ -64,8 +64,8 @@ export class StringShape extends t.StringShape {
         this._important = true;
         return this;
     }
-    //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): string {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -86,8 +86,8 @@ export class NumberShape extends t.NumberShape {
         this._important = true;
         return this;
     }
-    //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): number {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -108,7 +108,7 @@ export class AnyShape<T> extends t.AnyShape<T> {
         this._important = true;
         return this;
     }
-    public override parse(val: unknown) {
+    public parse(val: unknown): inferType<t.AnyShape<T>> {
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -130,7 +130,8 @@ export class ArrayShape<T extends BaseShape<any>> extends t.ArrayShape<T> {
         return this;
     }
     //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): inferType<t.ArrayShape<T>> {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -151,9 +152,9 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
         this._important = true;
         return this;
     }
-    //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
-        return ImportantCheck.bind(this as never)(super.parse(val))
+    //@ts-expect-error recursive
+    public parse(val: unknown): inferType<t.RecordShape<K,V>> {
+        return ImportantCheck.bind(this as never)(super.parse(val)) as never
     }
 }
 
@@ -174,7 +175,8 @@ export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.Ob
         return this;
     }
     //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): inferType<t.ObjectShape<T>> {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -195,8 +197,8 @@ export class BooleanShape extends t.BooleanShape {
         this._important = true;
         return this;
     }
-    //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): boolean {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -218,7 +220,8 @@ export class EnumShape<T extends (string | number | boolean)> extends t.EnumShap
         return this;
     }
     //@ts-expect-error ignore injected extends
-    public override parse(val: unknown) {
+    public parse(val: unknown): inferType<t.EnumShape<T>> {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -239,7 +242,8 @@ export class UnionShape<T extends PrimitiveShapes[]> extends t.UnionShape<T> {
         this._important = true;
         return this;
     }
-    public override parse(val: unknown) {
+    public parse(val: unknown): inferType<t.UnionShape<T>> {
+        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }

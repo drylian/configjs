@@ -14,24 +14,54 @@ export function ImportantCheck<T>(this: BaseShape<any>, value: T): T {
 
 export abstract class AbstractShape<T> extends t.AbstractShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
 }
 
 export abstract class BaseShape<T> extends t.BaseShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
 }
 
 export class StringShape extends t.StringShape {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -42,8 +72,18 @@ export class StringShape extends t.StringShape {
 
 export class NumberShape extends t.NumberShape {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -54,8 +94,18 @@ export class NumberShape extends t.NumberShape {
 
 export class AnyShape<T> extends t.AnyShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     public override parse(val: unknown) {
@@ -65,8 +115,18 @@ export class AnyShape<T> extends t.AnyShape<T> {
 
 export class ArrayShape<T extends BaseShape<any>> extends t.ArrayShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -77,8 +137,18 @@ export class ArrayShape<T extends BaseShape<any>> extends t.ArrayShape<T> {
 
 export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>> extends t.RecordShape<K, V> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -89,8 +159,18 @@ export class RecordShape<K extends string | number | symbol, V extends BaseShape
 
 export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.ObjectShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -101,8 +181,18 @@ export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.Ob
 
 export class BooleanShape extends t.BooleanShape {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -113,8 +203,18 @@ export class BooleanShape extends t.BooleanShape {
 
 export class EnumShape<T extends (string | number | boolean)> extends t.EnumShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     //@ts-expect-error ignore injected extends
@@ -125,8 +225,18 @@ export class EnumShape<T extends (string | number | boolean)> extends t.EnumShap
 
 export class UnionShape<T extends PrimitiveShapes[]> extends t.UnionShape<T> {
     public _prop = "_unconfigured_property";
+    public _save_default = false;
+    public _important = false;
     public prop(property: string) {
         this._prop = property;
+        return this;
+    }
+    public save() {
+        this._save_default = true;
+        return this;
+    }
+    public important() {
+        this._important = true;
         return this;
     }
     public override parse(val: unknown) {

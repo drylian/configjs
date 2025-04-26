@@ -1,6 +1,6 @@
 import { t, TshShapeError, type InferShapeType, type inferType, type TshViewer } from '@caeljs/tsh';
 
-export function ImportantCheck<T>(this: BaseShape<any>, value: T): T {
+export function ImportantCheck<T>(this: AbstractShape<any>, value: T): T {
     if ((typeof value === "undefined" || value === null) && this._important) {
         throw new TshShapeError({
             code: 'IMPORTANT_PROPERTY',
@@ -13,24 +13,6 @@ export function ImportantCheck<T>(this: BaseShape<any>, value: T): T {
 }
 
 export abstract class AbstractShape<T> extends t.AbstractShape<T> {
-    public _prop = "_unconfigured_property";
-    public _save_default = false;
-    public _important = false;
-    public prop(property: string) {
-        this._prop = property;
-        return this;
-    }
-    public save() {
-        this._save_default = true;
-        return this;
-    }
-    public important() {
-        this._important = true;
-        return this;
-    }
-}
-
-export abstract class BaseShape<T> extends t.BaseShape<T> {
     public _prop = "_unconfigured_property";
     public _save_default = false;
     public _important = false;
@@ -113,7 +95,7 @@ export class AnyShape<T> extends t.AnyShape<T> {
     }
 }
 
-export class ArrayShape<T extends BaseShape<any>> extends t.ArrayShape<T> {
+export class ArrayShape<T extends AbstractShape<any>> extends t.ArrayShape<T> {
     public _prop = "_unconfigured_property";
     public _save_default = false;
     public _important = false;
@@ -136,7 +118,7 @@ export class ArrayShape<T extends BaseShape<any>> extends t.ArrayShape<T> {
     }
 }
 
-export class RecordShape<K extends string | number | symbol, V extends BaseShape<any>> extends t.RecordShape<K, V> {
+export class RecordShape<K extends string | number | symbol, V extends AbstractShape<any>> extends t.RecordShape<K, V> {
     public _prop = "_unconfigured_property";
     public _save_default = false;
     public _important = false;
@@ -176,7 +158,6 @@ export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.Ob
     }
     //@ts-expect-error ignore injected extends
     public parse(val: unknown): inferType<t.ObjectShape<T>> {
-        //@ts-expect-error ignore injected extends
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -258,7 +239,6 @@ export type PrimitiveShapes =
     | ObjectShape<any>
     | RecordShape<any, any>
     | UnionShape<any>
-    | BaseShape<any>
     | AbstractShape<any>;
 
 export type infer<T> = TshViewer<InferShapeType<T>>;
@@ -287,9 +267,9 @@ export function number() { return new NumberShape(); }
 export function boolean() { return new BooleanShape(); }
 export function any() { return new AnyShape(); }
 export function object<T extends Record<string, any>>(shape: T) { return new ObjectShape(shape); }
-export function array<T extends BaseShape<any>>(shape: T) { return new ArrayShape(shape); }
-export function record<K extends string | number, V extends BaseShape<any>>(keyShape: BaseShape<K>, valueShape: V) {
-    return new RecordShape(keyShape as never, valueShape as V) as RecordShape<K, V>;
+export function array<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape); }
+export function record<K extends AbstractShape<any>, V extends AbstractShape<any>>(keyShape: K, valueShape: V) {
+    return new RecordShape(keyShape, valueShape);
 }
 export function union<T extends PrimitiveShapes[]>(shapes: T) { return new UnionShape(shapes); }
 export function unionOf<T extends PrimitiveShapes[]>(...shapes: T) { return new UnionShape(shapes); }
@@ -321,7 +301,7 @@ export function validate<T extends PrimitiveShapes>(value: unknown, shape: T) {
     }
 }
 
-export function isValid<T>(value: unknown, shape: BaseShape<T>) {
+export function isValid<T>(value: unknown, shape: AbstractShape<T>) {
     try {
         shape.parse(value);
         return true;
@@ -339,7 +319,7 @@ export function omit<T extends ObjectShape<any>, K extends keyof InferShapeType<
     return shape.omit(keys);
 }
 
-export function merge<T extends Record<string, BaseShape<any>>, U extends Record<string, BaseShape<any>>>(shape1: ObjectShape<T>, shape2: ObjectShape<U>) {
+export function merge<T extends Record<string, AbstractShape<any>>, U extends Record<string, AbstractShape<any>>>(shape1: ObjectShape<T>, shape2: ObjectShape<U>) {
     return shape1.merge(shape2 as never) as unknown as ObjectShape<T & U>;
 }
 
@@ -348,10 +328,10 @@ export function extend<T extends ObjectShape<any>, U extends Record<string, Prim
 }
 
 // Array utilities
-export function nonEmptyArray<T extends BaseShape<any>>(shape: T) { return new ArrayShape(shape).nonEmpty(); }
-export function uniqueArray<T extends BaseShape<any>>(shape: T) { return new ArrayShape(shape).unique(); }
-export function minLength<T extends BaseShape<any>>(shape: T, min: number) { return new ArrayShape(shape).min(min); }
-export function maxLength<T extends BaseShape<any>>(shape: T, max: number) { return new ArrayShape(shape).max(max); }
+export function nonEmptyArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).nonEmpty(); }
+export function uniqueArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).unique(); }
+export function minLength<T extends AbstractShape<any>>(shape: T, min: number) { return new ArrayShape(shape).min(min); }
+export function maxLength<T extends AbstractShape<any>>(shape: T, max: number) { return new ArrayShape(shape).max(max); }
 
 // String validators
 export function email() { return new StringShape().email(); }

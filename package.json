@@ -2,7 +2,7 @@
   "name": "@caeljs/config",
   "type": "module",
   "description": "Simple system of standardization of configurations for node js.",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "main": "cjs/ConfigJS.cjs",
   "module": "esm/ConfigJS.js",
   "types": "ConfigJS.d.ts",
@@ -53,12 +53,12 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.10",
-    "@types/node": "^22.14.1",
+    "@types/node": "^22.15.2",
     "dts-bundle-generator": "^9.5.1",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@caeljs/tsh": "^1.0.4"
+    "@caeljs/tsh": "^1.1.2"
   }
 }

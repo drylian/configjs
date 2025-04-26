@@ -7,7 +7,7 @@ export * from "./libs/drivers";
 import * as c from "./shapes";
 export { c };
 import { type AnyConfigDriver, type ConfigJSOptions, type ConfigJSPartials, type ConfigJSPaths, type ConfigJSResolver, type ConfigJSRoots, type ConfigJSTree } from "./libs/types";
-import { BaseShape } from "@caeljs/tsh";
+import { AbstractShape } from "@caeljs/tsh";
 
 /**
  * Configuration management class that provides a type-safe interface
@@ -67,7 +67,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns The shape instance for the specified path
      * @throws If the path is invalid or doesn't point to a configuration property
      */
-    public getSchema<Path extends ConfigJSPaths<Shapes>>(path: Path): Shapes[Path] extends BaseShape<any> ? Shapes[Path] : BaseShape<any> {
+    public getSchema<Path extends ConfigJSPaths<Shapes>>(path: Path): Shapes[Path] extends AbstractShape<any> ? Shapes[Path] : AbstractShape<any> {
         const parts = path.split('.');
         let current: any = this.shapes;
 
@@ -78,7 +78,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             current = current[part];
         }
 
-        if (!(current instanceof BaseShape)) {
+        if (!(current instanceof AbstractShape)) {
             throw `[ConfigJS]: Property "${path}" is not a configuration property`;
         }
 
@@ -137,7 +137,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             current = current[part];
         }
 
-        if ((current instanceof BaseShape)) {
+        if ((current instanceof AbstractShape)) {
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
 
@@ -168,7 +168,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             current = current[part];
         }
 
-        if ((current instanceof BaseShape)) {
+        if ((current instanceof AbstractShape)) {
             throw `[ConfigJS]: Property "${path}" is not a root property`;
         }
         return this.driver.root.bind(this)(current) as ConfigJSResolver<ConfigDriver['async'], TshViewer<ConfigJSTree<Shapes>[Path]>>;
@@ -235,7 +235,7 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
         const collectKeys = (obj: any, prefix = '') => {
             Object.keys(obj).forEach(key => {
                 const fullPath = prefix ? `${prefix}.${key}` : key;
-                if (obj[key] instanceof BaseShape) {
+                if (obj[key] instanceof AbstractShape) {
                     result.push(fullPath);
                 } else if (typeof obj[key] === 'object' && obj[key] !== null) {
                     collectKeys(obj[key], fullPath);
@@ -268,9 +268,9 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
             ...opts,
         };
 
-        const getAllShapes = (obj: any): BaseShape<any>[] => {
+        const getAllShapes = (obj: any): AbstractShape<any>[] => {
             return Object.values(obj).flatMap(value =>
-                value instanceof BaseShape
+                value instanceof AbstractShape
                     ? [value]
                     : typeof value === 'object' && value !== null
                         ? getAllShapes(value)
@@ -286,9 +286,9 @@ export class ConfigJS<const ConfigDriver extends AnyConfigDriver<boolean, any>, 
      * @returns Operation result (type depends on driver's async flag)
      */
     public save() {
-        const getAllShapes = (obj: any): BaseShape<any>[] => {
+        const getAllShapes = (obj: any): AbstractShape<any>[] => {
             return Object.values(obj).flatMap(value =>
-                value instanceof BaseShape
+                value instanceof AbstractShape
                     ? [value]
                     : typeof value === 'object' && value !== null
                         ? getAllShapes(value)

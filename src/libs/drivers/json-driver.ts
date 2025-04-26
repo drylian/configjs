@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
-import { type infer as InferShapeType, StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,BaseShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
+import { type infer as InferShapeType, StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
 import { getShapeDefault } from '@caeljs/tsh';
 import type { ConfigJS } from '../../ConfigJS';
 
@@ -133,7 +133,7 @@ export const jsonDriver = new ConfigJSDriver({
     },
 
     //@ts-expect-error additional contents in respo
-    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferShapeType<BaseShape<any>>>, updates: Record<string, any>) {
+    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, AbstractShape<any>>>, object_shape: Record<string, AbstractShape<any>>, values: Record<string, InferShapeType<AbstractShape<any>>>, updates: Record<string, any>) {
         if (!values || typeof values !== 'object') {
             console.warn('[JSONDriver] Insert requires an object of values');
             return false;
@@ -145,7 +145,7 @@ export const jsonDriver = new ConfigJSDriver({
             for (const key in values) {
                 const shape = object_shape[key];
 
-                if (!shape || !(shape instanceof BaseShape)) {
+                if (!shape || !(shape instanceof AbstractShape)) {
                     console.warn(`[JSONDriver] No shape found for key: ${key}`);
                     continue;
                 }

@@ -1,6 +1,6 @@
 import { ConfigJSDriver } from '../driver';
 import fs from 'node:fs';
-import { type infer as InferShapeType, StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,BaseShape,AbstractShape, ImportantCheck } from "../../shapes";
+import { type infer as InferShapeType, StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape, AbstractShape, ImportantCheck } from "../../shapes";
 import { ConfigJS } from '../../ConfigJS';
 import { getShapeDefault } from '@caeljs/tsh';
 
@@ -46,7 +46,7 @@ const writeEnvFile = (path: string, data: Record<string, string>) => {
     fs.writeFileSync(path, content + "\n", "utf8");
 };
 
-const convertEnvValue = (shape: BaseShape<any>, value: string): any => {
+const convertEnvValue = (shape: AbstractShape<any>, value: string): any => {
     try {
         // Special handling for array values
         if (shape instanceof ArrayShape) {
@@ -183,7 +183,7 @@ export const envDriver = new ConfigJSDriver({
     },
 
     //@ts-expect-error
-    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, BaseShape<any>>>, object_shape: Record<string, BaseShape<any>>, values: Record<string, InferShapeType<BaseShape<any>>>, updates: Record<string, any>) {
+    insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, AbstractShape<any>>>, object_shape: Record<string, AbstractShape<any>>, values: Record<string, InferShapeType<AbstractShape<any>>>, updates: Record<string, any>) {
         if (!values || typeof values !== 'object') {
             console.warn('[EnvDriver] Insert requires an object of values');
             return false;
@@ -196,7 +196,7 @@ export const envDriver = new ConfigJSDriver({
                 const property = key;
                 const shape_or_object = object_shape[key];
 
-                if (shape_or_object instanceof BaseShape) {
+                if (shape_or_object instanceof AbstractShape) {
                     const config = shape_or_object.conf();
                     if (!this.driver.supported_check.bind(this)(shape_or_object)) {
                         console.warn(`[EnvDriver] Unsupported shape type for key: ${property}`);

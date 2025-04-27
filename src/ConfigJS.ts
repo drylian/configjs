@@ -6,8 +6,9 @@ export * from "./libs/driver";
 export * from "./libs/drivers";
 import * as c from "./shapes";
 export { c };
+import { t, AbstractShape } from "@caeljs/tsh";
+export { t };
 import { type AnyConfigDriver, type ConfigJSOptions, type ConfigJSPartials, type ConfigJSPaths, type ConfigJSResolver, type ConfigJSRoots, type ConfigJSTree } from "./libs/types";
-import { AbstractShape } from "@caeljs/tsh";
 
 /**
  * Configuration management class that provides a type-safe interface

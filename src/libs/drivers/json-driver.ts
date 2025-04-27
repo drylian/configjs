@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
-import { type infer as InferShapeType, StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
-import { getShapeDefault } from '@caeljs/tsh';
+import { StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
+import { getShapeDefault, type infer as InferShapeType } from '@caeljs/tsh';
 import type { ConfigJS } from '../../ConfigJS';
 
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, any>) => {

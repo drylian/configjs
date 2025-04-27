@@ -1,7 +1,7 @@
 /** Config TYPES **/
-import type { AbstractShape, infer as InferType } from "../shapes";
+import type { AbstractShape } from "../shapes";
 import type { ConfigJS } from "../ConfigJS";
-
+import type { infer as InferType } from "@caeljs/tsh";
 type If<Cond extends boolean, Then, Else> = Cond extends true ? Then : Else;
 export type ConfigJSOptions = { [key: string]: AbstractShape<any> | AbstractShape<any> | ConfigJSOptions; };
 export type ConfigJSTree<T> = {

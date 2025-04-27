@@ -1,8 +1,8 @@
 import { ConfigJSDriver } from '../driver';
 import fs from 'node:fs';
-import { type infer as InferShapeType, StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape, AbstractShape, ImportantCheck } from "../../shapes";
+import { StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape, AbstractShape, ImportantCheck } from "../../shapes";
 import { ConfigJS } from '../../ConfigJS';
-import { getShapeDefault } from '@caeljs/tsh';
+import { getShapeDefault, type infer as InferShapeType } from '@caeljs/tsh';
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, string>) => {

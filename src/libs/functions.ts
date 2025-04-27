@@ -1,4 +1,5 @@
-import { AbstractShape, type PrimitiveShapes } from "../shapes";
+import type { PrimitiveShapes } from "@caeljs/tsh";
+import { AbstractShape } from "../shapes";
 
 export const processShapes = <T extends Record<string, PrimitiveShapes>>(shapes: T, prefix = '') => {
     Object.keys(shapes).forEach(key => {

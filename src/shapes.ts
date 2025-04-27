@@ -1,4 +1,4 @@
-import { t, TshShapeError, type InferShapeType, type inferType, type TshViewer } from '@caeljs/tsh';
+import { t, TshShapeError, type InferShapeType, type inferType, type PrimitiveShapes, type TshViewer } from '@caeljs/tsh';
 
 export function ImportantCheck<T>(this: AbstractShape<any>, value: T): T {
     if ((typeof value === "undefined" || value === null) && this._important) {
@@ -158,7 +158,7 @@ export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.Ob
     }
     //@ts-expect-error ignore injected extends
     public parse(val: unknown): inferType<t.ObjectShape<T>> {
-        return ImportantCheck.bind(this as never)(super.parse(val))
+        return ImportantCheck.bind(this as never)(super.parse(val))as never
     }
 }
 
@@ -229,19 +229,6 @@ export class UnionShape<T extends PrimitiveShapes[]> extends t.UnionShape<T> {
     }
 }
 
-export type PrimitiveShapes =
-    | NumberShape
-    | StringShape
-    | BooleanShape
-    | AnyShape<any>
-    | EnumShape<any>
-    | ArrayShape<any>
-    | ObjectShape<any>
-    | RecordShape<any, any>
-    | UnionShape<any>
-    | AbstractShape<any>;
-
-export type infer<T> = TshViewer<InferShapeType<T>>;
 
 export function Enum<const T extends readonly (string | number | boolean)[]>(
     keys: T
@@ -390,3 +377,4 @@ export function refine<T extends PrimitiveShapes>(
 export const deepEqual = t.deepEqual;
 export const getShapeDefault = t.getShapeDefault;
 export const processShapes = t.processShapes;
+export { t };

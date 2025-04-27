@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { ConfigJSDriver } from '../driver';
-import { StringShape,NumberShape,EnumShape,ArrayShape,BooleanShape,AbstractShape, ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
-import { getShapeDefault, type infer as InferShapeType } from '@caeljs/tsh';
+import { ImportantCheck, RecordShape, ObjectShape } from "../../shapes";
+import { BooleanShape, StringShape, NumberShape, EnumShape, ArrayShape, getShapeDefault, type infer as InferShapeType, AbstractShape } from '@caeljs/tsh';
 import type { ConfigJS } from '../../ConfigJS';
 
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, any>) => {
@@ -157,9 +157,10 @@ export const jsonDriver = new ConfigJSDriver({
                 const config = shape.conf();
 
                 try {
+                    //@ts-expect-error ignore 
                     updates[config.prop] = shape.parse(values[key]);
                 } catch (err) {
-                    const error = err as Error;
+                    const error = err as Error;//@ts-expect-error ignore 
                     console.warn(`[JSONDriver] Error parsing value for ${key}(${config.prop}): ${error.message}`);
                     continue;
                 }

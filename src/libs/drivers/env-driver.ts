@@ -1,8 +1,8 @@
 import { ConfigJSDriver } from '../driver';
 import fs from 'node:fs';
-import { StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape, AbstractShape, ImportantCheck } from "../../shapes";
+import { ImportantCheck } from "../../shapes";
 import { ConfigJS } from '../../ConfigJS';
-import { getShapeDefault, type infer as InferShapeType } from '@caeljs/tsh';
+import {BooleanShape, StringShape, NumberShape, EnumShape, ArrayShape, getShapeDefault, type infer as InferShapeType, AbstractShape } from '@caeljs/tsh';
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
 
@@ -203,10 +203,10 @@ export const envDriver = new ConfigJSDriver({
                         : shape_or_obj instanceof BooleanShape
                             ? (shape_or_obj.parse(val) ? 'true' : 'false')
                             : String(shape_or_obj.parse(val));
-
+                    //@ts-expect-error ignore 
                     updates[shape_or_obj.conf().prop] = envValue;
 
-                    if (this.config.processEnv) {
+                    if (this.config.processEnv) {//@ts-expect-error ignore 
                         process.env[shape_or_obj.conf().prop] = envValue;
                     }
                 } else if (typeof shape_or_obj === 'object' && shape_or_obj !== null) {

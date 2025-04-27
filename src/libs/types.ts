@@ -1,6 +1,6 @@
 /** Config TYPES **/
 import type { ConfigJS } from "../ConfigJS";
-import type { infer as InferType } from "@caeljs/tsh";
+import type { infer as InferType, AbstractShape as AAbstractShape } from "@caeljs/tsh";
 import type { AbstractShape } from "../shapes";
 
 type If<Cond extends boolean, Then, Else> = Cond extends true ? Then : Else;
@@ -63,7 +63,7 @@ export type AnyConfigTypedDriver<
 > = {
   async: DriverAsync;
   config: DriverConfig;
-  supported: (new (...any: any) => AbstractShape<any>)[];
+  supported: (new (...any: any) => AbstractShape<any> | AAbstractShape<any>)[];
 
   set(
     this: AnyConfigJS<DriverConfig>,

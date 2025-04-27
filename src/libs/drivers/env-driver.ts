@@ -5,25 +5,25 @@ import { ConfigJS } from '../../ConfigJS';
 import { getShapeDefault, type infer as InferShapeType } from '@caeljs/tsh';
 
 const LINE = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^#\n]*))?.*$/gm;
+
 const fileDelay = (path: string, instance: ConfigJS<any, any>, delay: number, save?: Record<string, string>) => {
     const cached_at = Number(instance.cached_at.toString());
     setTimeout(() => {
         if (save) {
             writeEnvFile(path, save);
-        } else {
-            if (instance.cached_at !== cached_at) return;
+        } else if (instance.cached_at === cached_at) {
             instance.cached = undefined;
         }
     }, delay);
-}
+};
 
 const parseEnvContent = (content: string): Record<string, string> => {
-    const obj: Record<string, string> = {};
+    const env: Record<string, string> = {};
     content.replace(/\r\n?/g, '\n').replace(LINE, (_, key, dq, sq, unq) => {
-        obj[key] = dq ?? sq ?? unq?.trim() ?? undefined;
+        env[key] = dq ?? sq ?? unq?.trim() ?? "";
         return "";
     });
-    return obj;
+    return env;
 };
 
 const readEnvFile = (path: string): Record<string, string> => {
@@ -34,30 +34,29 @@ const readEnvFile = (path: string): Record<string, string> => {
 
 const writeEnvFile = (path: string, data: Record<string, string>) => {
     const existing = readEnvFile(path);
-    const content = Object.entries({ ...existing, ...data })
-        .map(([key, value]) => {
-            if (existing[key] && !data[key]) return `${key}=`;
-            // Escape quotes and newlines in values
-            const escapedValue = value.replace(/"/g, '\\"').replace(/\n/g, '\\n');
-            return `${key}="${escapedValue}"`;
-        })
-        .join("\n");
+    const merged = { ...existing, ...data };
 
-    fs.writeFileSync(path, content + "\n", "utf8");
+    const entries = Object.entries(merged)
+        .filter(([_, v]) => v !== undefined)
+        .map(([key, value]) => {
+            const sanitized = value
+                .replace(/\\/g, '\\\\')
+                .replace(/\n/g, '\\n')
+                .replace(/"/g, '\\"');
+            return `${key}="${sanitized}"`;
+        });
+
+    fs.writeFileSync(path, entries.join("\n") + "\n", "utf8");
 };
 
 const convertEnvValue = (shape: AbstractShape<any>, value: string): any => {
     try {
-        // Special handling for array values
         if (shape instanceof ArrayShape) {
             return JSON.parse(value);
         }
-
-        // For other shapes, use the parse method with coercion if available
         if ('coerce' in shape && typeof shape.coerce === 'function') {
             return shape.coerce().parse(value);
         }
-
         return shape.parse(value);
     } catch (error) {
         throw error;
@@ -69,7 +68,7 @@ export const envDriver = new ConfigJSDriver({
     supported: [StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape],
 
     supported_check(shape) {
-        return this.driver.supported.some(SupportedShape => shape instanceof SupportedShape);
+        return this.driver.supported.some(Supported => shape instanceof Supported);
     },
 
     config: {
@@ -105,62 +104,57 @@ export const envDriver = new ConfigJSDriver({
     get(shape) {
         const conf = shape.conf();
         if (!this.driver.supported_check.bind(this)(shape)) {
-            console.warn(`[EnvDriver] Unsupported shape type for key: ${shape._prop}`);
+            console.warn(`[EnvDriver] Unsupported shape: ${shape._prop}`);
             return getShapeDefault(shape);
         }
-        const contents = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, string>;
+        const contents = this.cached ?? readEnvFile(this.config.filepath);
         if (!this.cached) this.cached = contents;
 
-        // update delay
         fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
-        const rawValue = contents[conf.prop] ?? contents[conf.key];
 
+        const rawValue = contents[conf.prop] ?? contents[conf.key];
         try {
-            return rawValue !== undefined
-                ? convertEnvValue(shape, rawValue) ?? getShapeDefault(shape)
-                : getShapeDefault(shape);
+            return rawValue !== undefined ? convertEnvValue(shape, rawValue) : getShapeDefault(shape);
         } catch (err) {
-            const error = err as Error;
-            console.warn(`[EnvDriver] Error parsing value for ${shape._prop}: ${error.message}`);
+            console.warn(`[EnvDriver] Error parsing "${shape._prop}": ${(err as Error).message}`);
             return getShapeDefault(shape);
         }
     },
 
-    set(shape, newValue) {
+    set(shape, value) {
         if (!this.driver.supported_check.bind(this)(shape)) {
-            console.warn(`[EnvDriver] Unsupported shape type for key: ${shape._prop}`);
-            return newValue;
+            console.warn(`[EnvDriver] Unsupported shape: ${shape._prop}`);
+            return value;
         }
-        const contents = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, string>;
+        const contents = this.cached ?? readEnvFile(this.config.filepath);
         if (!this.cached) this.cached = contents;
-        try {
-            let valueToStore: string = shape.parse(newValue);
 
-            if (shape instanceof ArrayShape) {
-                valueToStore = JSON.stringify(newValue);
-            } else if (shape instanceof BooleanShape) {
-                valueToStore = newValue ? 'true' : 'false';
-            } else {
-                valueToStore = String(newValue);
-            }
+        let valueToStore: string;
+        try {
+            valueToStore = shape instanceof ArrayShape
+                ? JSON.stringify(value)
+                : shape instanceof BooleanShape
+                    ? (value ? 'true' : 'false')
+                    : String(value);
 
             this.cached[shape._prop] = valueToStore;
             fileDelay(this.driver.config.filepath, this, this.driver.config.delay, { [shape._prop]: valueToStore });
-            return newValue;
+            return value;
         } catch (error) {
-            console.error(`[EnvDriver] Error setting value for "${shape._prop}" (key:${shape._key}):`, error);
+            console.error(`[EnvDriver] Error setting "${shape._prop}":`, error);
             throw error;
         }
     },
 
     del(shape) {
-        const contents = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, any>;
+        const contents = this.cached ?? readEnvFile(this.config.filepath);
         if (!this.cached) this.cached = contents;
 
         delete contents[shape._prop];
         delete contents[shape._key];
         delete this.cached[shape._prop];
         delete this.cached[shape._key];
+
         writeEnvFile(this.config.filepath, contents);
 
         if (this.config.processEnv) {
@@ -171,107 +165,94 @@ export const envDriver = new ConfigJSDriver({
     },
 
     has(shape) {
-        const contents = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, any>;
+        const contents = this.cached ?? readEnvFile(this.config.filepath);
         if (!this.cached) this.cached = contents;
+
         fileDelay(this.driver.config.filepath, this, this.driver.config.delay);
+
         return shape._prop in contents || shape._prop in process.env;
     },
 
     save() {
-        // not need, this is maked to use in async drivers
         return true;
     },
 
     //@ts-expect-error
     insert(this: ConfigJS<ConfigJSDriver<false, any, any>, Record<string, AbstractShape<any>>>, object_shape: Record<string, AbstractShape<any>>, values: Record<string, InferShapeType<AbstractShape<any>>>, updates: Record<string, any>) {
         if (!values || typeof values !== 'object') {
-            console.warn('[EnvDriver] Insert requires an object of values');
+            console.warn('[EnvDriver] Insert requires an object');
             return false;
         }
-        if (!updates) updates = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, string>;
+
+        updates = updates ?? (this.cached ?? readEnvFile(this.config.filepath));
         if (!this.cached) this.cached = updates;
 
         try {
             for (const key in values) {
-                const property = key;
-                const shape_or_object = object_shape[key];
+                const shape_or_obj = object_shape[key];
+                const val = values[key];
 
-                if (shape_or_object instanceof AbstractShape) {
-                    const config = shape_or_object.conf();
-                    if (!this.driver.supported_check.bind(this)(shape_or_object)) {
-                        console.warn(`[EnvDriver] Unsupported shape type for key: ${property}`);
+                if (shape_or_obj instanceof AbstractShape) {
+                    if (!this.driver.supported_check.bind(this)(shape_or_obj)) {
+                        console.warn(`[EnvDriver] Unsupported shape for key: ${key}`);
                         continue;
                     }
 
-                    try {
-                        const parsedValue = shape_or_object.parse(values[key]);
-                        let envValue: string;
+                    let envValue = shape_or_obj instanceof ArrayShape
+                        ? JSON.stringify(shape_or_obj.parse(val))
+                        : shape_or_obj instanceof BooleanShape
+                            ? (shape_or_obj.parse(val) ? 'true' : 'false')
+                            : String(shape_or_obj.parse(val));
 
-                        if (shape_or_object instanceof ArrayShape) {
-                            envValue = JSON.stringify(parsedValue);
-                        } else if (shape_or_object instanceof BooleanShape) {
-                            envValue = parsedValue ? 'true' : 'false';
-                        } else {
-                            envValue = String(parsedValue);
-                        }
+                    updates[shape_or_obj.conf().prop] = envValue;
 
-                        updates[config.prop] = envValue;
-
-                        if (this.config.processEnv) {
-                            process.env[config.prop] = envValue;
-                        }
-                    } catch (err) {
-                        const error = err as Error;
-                        console.warn(`[EnvDriver] Error parsing value for ${property} (${config.prop}): ${error.message}`);
-                        continue;
+                    if (this.config.processEnv) {
+                        process.env[shape_or_obj.conf().prop] = envValue;
                     }
-                } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {
-                    this.driver.insert.bind(this)(shape_or_object, values[key], updates);
-                } else {
-                    console.warn(`[EnvDriver] Invalid shape for key: ${property}`);
-                    continue;
+                } else if (typeof shape_or_obj === 'object' && shape_or_obj !== null) {
+                    this.driver.insert.bind(this)(shape_or_obj, val, updates);
                 }
             }
 
             fileDelay(this.driver.config.filepath, this, this.driver.config.delay, updates);
             return true;
         } catch (error) {
-            console.error('[EnvDriver] Error in insert operation:', error);
+            console.error('[EnvDriver] Insert operation error:', error);
             return false;
         }
     },
 
     root(object_shape, contented?: Record<string, any>) {
+        const contents = contented ?? (this.cached ?? readEnvFile(this.config.filepath));
+        if (!this.cached) this.cached = contents;
+
         const result: any = {};
-        if (!contented) contented = Object(this.cached || readEnvFile(this.config.filepath)) as Record<string, string>;
-        if (!this.cached) this.cached = contented;
 
         for (const key in object_shape) {
-            const shape_or_object = object_shape[key];
+            const shape = object_shape[key];
 
-            if (shape_or_object instanceof AbstractShape) {
-                if (!this.driver.supported_check.bind(this)(shape_or_object)) {
-                    console.warn(`[EnvDriver] Unsupported shape type for key: ${key}`);
+            if (shape instanceof AbstractShape) {
+                if (!this.driver.supported_check.bind(this)(shape)) {
+                    console.warn(`[EnvDriver] Unsupported shape for: ${key}`);
                     continue;
                 }
 
-                const conf = shape_or_object.conf();
-                const rawValue = contented[conf.prop] ?? contented[conf.key];
+                const conf = shape.conf();
+                const rawValue = contents[conf.prop] ?? contents[conf.key];
 
                 try {
                     result[key] = rawValue !== undefined
-                        ? convertEnvValue(shape_or_object, rawValue) ?? getShapeDefault(shape_or_object)
-                        : getShapeDefault(shape_or_object);
+                        ? convertEnvValue(shape, rawValue)
+                        : getShapeDefault(shape);
                 } catch (err) {
-                    const error = err as Error;
-                    console.warn(`[EnvDriver] Error parsing value for ${key}: ${error.message}, using default`);
-                    result[key] = getShapeDefault(shape_or_object);
+                    console.warn(`[EnvDriver] Parse error for ${key}, using default.`);
+                    result[key] = getShapeDefault(shape);
                 }
-            } else if (typeof shape_or_object === 'object' && shape_or_object !== null) {
-                //@ts-expect-error recursive declaration
-                result[key] = this.driver.root.bind(this)(shape_or_object, contented);
+            } else if (typeof shape === 'object' && shape !== null) {
+                //@ts-expect-error recursive
+                result[key] = this.driver.root.bind(this)(shape, contents);
             } else {
-                result[key] = shape_or_object;
+                result[key] = shape;
             }
         }
 
@@ -281,34 +262,31 @@ export const envDriver = new ConfigJSDriver({
 
     load(shapes) {
         if (this.config.processEnv) {
-            shapes.forEach(shape => {
+            for (const shape of shapes) {
                 const conf = shape.conf();
-                if (!this.driver.supported_check.bind(this)(shape)) return;
+                if (!this.driver.supported_check.bind(this)(shape)) continue;
                 Object.defineProperty(process.env, conf.prop, {
-                    get: () => {
-                        return this.get(conf.key);
-                    },
-                    set: (value) => {
-                        this.set(conf.key, value);
-                    },
+                    get: () => this.get(conf.key),
+                    set: (val) => this.set(conf.key, val),
                     enumerable: true,
-                    configurable: true
+                    configurable: true,
                 });
-            });
+            }
         }
-        shapes.forEach(shape => {
-            if (!this.driver.supported_check.bind(this)(shape)) return;
+
+        for (const shape of shapes) {
+            if (!this.driver.supported_check.bind(this)(shape)) continue;
             const conf = shape.conf();
             const contents = readEnvFile(this.config.filepath);
             const rawValue = contents[conf.prop] ?? contents[conf.key];
 
-            if (typeof rawValue == "undefined" && conf.save_default && (conf.default || "getDefaults" in shape)) {
-                this.set(conf.key, getShapeDefault(shape))
+            if (rawValue === undefined && conf.save_default) {
+                this.set(conf.key, getShapeDefault(shape));
             }
-            ImportantCheck.bind(this as never)(rawValue ?? getShapeDefault(shape))
-        });
+
+            ImportantCheck.bind(this as never)(rawValue ?? getShapeDefault(shape));
+        }
 
         return true;
     },
 });
-export default envDriver;

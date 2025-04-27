@@ -16,7 +16,7 @@
     },
   },
   "packages": {
-    "@caeljs/tsh": ["@caeljs/tsh@1.1.2", "", {}, "sha512-NS3uDJfGI8jwKt7OF3lS0qZHcnfiYv6jaCGSWLorhpq4vo758vlMw4v0PH2acGiR4G1eBX23PyD6EP1/GnwGwg=="],
+    "@caeljs/tsh": ["@caeljs/tsh@1.1.3", "", {}, "sha512-FeseXrcKaY6f1D9p40uvAWAo0zNMh059xsVjTBVFS0qR0D0DtJ9yxAXR/5Fa1pAIHIpQzqSdA+TxsDSntsGOOA=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.1", "", { "os": "aix", "cpu": "ppc64" }, "sha512-kfYGy8IdzTGy+z0vFGvExZtxkFlA4zAxgKEahG9KE1ScBjpQnFsNOX8KTU5ojNru5ed5CVoJYXFtoxaq5nFbjQ=="],
 

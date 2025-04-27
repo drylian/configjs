@@ -1,4 +1,4 @@
-import { t, TshShapeError, type InferShapeType, type inferType, type PrimitiveShapes, type TshViewer } from '@caeljs/tsh';
+import { t, TshShapeError, type InferShapeType, type inferType, type InferUnionType, type PrimitiveShapes, type TshViewer } from '@caeljs/tsh';
 
 export function ImportantCheck<T>(this: AbstractShape<any>, value: T): T {
     if ((typeof value === "undefined" || value === null) && this._important) {
@@ -229,16 +229,15 @@ export class UnionShape<T extends PrimitiveShapes[]> extends t.UnionShape<T> {
     }
 }
 
-
-export function Enum<const T extends readonly (string | number | boolean)[]>(
+function Enum<const T extends readonly (string | number | boolean)[]>(
     keys: T
 ): EnumShape<T[number]>;
 
-export function Enum<const T extends Record<string, string | number | boolean>>(
+function Enum<const T extends Record<string, string | number | boolean>>(
     enumObj: T
 ): EnumShape<T[keyof T]>;
 
-export function Enum<T extends object | readonly (string | number)[]>(arg: T) {
+function Enum<T extends object | readonly (string | number)[]>(arg: T) {
     if (Array.isArray(arg)) {
         return new EnumShape(arg);
     } else {
@@ -313,7 +312,6 @@ export function merge<T extends Record<string, AbstractShape<any>>, U extends Re
 export function extend<T extends ObjectShape<any>, U extends Record<string, PrimitiveShapes>>(shape: T, extensions: U) {
     return shape.merge(new ObjectShape(extensions) as never) as unknown as ObjectShape<TshViewer<T> & U>;
 }
-
 // Array utilities
 export function nonEmptyArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).nonEmpty(); }
 export function uniqueArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).unique(); }
@@ -378,3 +376,4 @@ export const deepEqual = t.deepEqual;
 export const getShapeDefault = t.getShapeDefault;
 export const processShapes = t.processShapes;
 export { t };
+export { Enum as enum, Enum };

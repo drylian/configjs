@@ -1,5 +1,4 @@
-import type { PrimitiveShapes } from "@caeljs/tsh";
-import { AbstractShape } from "../shapes";
+import { AbstractShape, type PrimitiveShapes } from "@caeljs/tsh";
 
 export const processShapes = <T extends Record<string, PrimitiveShapes>>(shapes: T, prefix = '') => {
     Object.keys(shapes).forEach(key => {
@@ -7,9 +6,8 @@ export const processShapes = <T extends Record<string, PrimitiveShapes>>(shapes:
         const shapeOrShapes = shapes[key];
 
         if (shapeOrShapes instanceof AbstractShape) {
-            if (shapeOrShapes._prop === "_unconfigured_property") {
-                shapeOrShapes.prop(fullPath);
-            }
+            //@ts-expect-error ignore, tsh abstract 
+            if ("_prop" in shapeOrShapes && "prop" in shapeOrShapes && shapeOrShapes._prop === "_unconfigured_property") shapeOrShapes.prop(fullPath);
             shapeOrShapes._key = fullPath;
         } else if (typeof shapeOrShapes === 'object' && shapeOrShapes !== null) {
             processShapes(shapeOrShapes as never, fullPath);

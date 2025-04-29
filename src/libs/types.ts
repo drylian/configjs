@@ -2,11 +2,12 @@
 import type { ConfigJS } from "../ConfigJS";
 import type { infer as InferType, AbstractShape as AAbstractShape } from "@caeljs/tsh";
 import type { AbstractShape } from "../shapes";
+import type { AbstractConfigJSDriver } from "./driver";
 
-type If<Cond extends boolean, Then, Else> = Cond extends true ? Then : Else;
+export type If<Cond extends boolean, Then, Else> = Cond extends true ? Then : Else;
 
 export type ConfigJSOptions = {
-  [key: string]: AbstractShape<any> | ConfigJSOptions;
+  [key: string]: AbstractShape<any> | AAbstractShape<any> | ConfigJSOptions;
 };
 
 export type ConfigJSResolvePath<T, P extends string> = 
@@ -104,7 +105,7 @@ export type AnyConfigTypedDriver<
     shape: AbstractShape<any>,
   ): If<DriverAsync, Promise<boolean>, boolean>;
 
-  supported_check(
+  check(
     this: AnyConfigJS<DriverConfig>,
     shape: AbstractShape<any>,
   ): If<DriverAsync, Promise<boolean>, boolean>;
@@ -135,6 +136,6 @@ export type AnyConfigDriver<
 >;
 
 export type AnyConfigJS<DriverConfig extends object = {}> = ConfigJS<
-  AnyConfigDriver<boolean, DriverConfig>,
+typeof AbstractConfigJSDriver<boolean, DriverConfig>,
   Record<string, AbstractShape<any>>
 >;

@@ -9,11 +9,12 @@ export * from "./libs/functions";
 export * from "./libs/driver";
 export * from "./libs/drivers";
 import * as c from "./shapes";
+import { AbstractShape } from "./shapes";
+
 export { c };
-import { t, AbstractShape } from "@caeljs/tsh";
+import { t, AbstractShape as AAbstractShape } from "@caeljs/tsh";
 export { t };
 import {
-  type AnyConfigDriver,
   type ConfigJSOptions,
   type ConfigJSPartials,
   type ConfigJSPaths,
@@ -21,7 +22,9 @@ import {
   type ConfigJSResolver,
   type ConfigJSResource,
   type ConfigJSRoots,
+  type If,
 } from "./libs/types";
+import type { AbstractConfigJSDriver } from "./libs/driver";
 
 /**
  * Configuration management class that provides a type-safe interface
@@ -31,7 +34,7 @@ import {
  * @template Shapes - The nested shapes structure defining the configuration schema
  */
 export class ConfigJS<
-  const ConfigDriver extends AnyConfigDriver<boolean, any>,
+  const ConfigDriver extends typeof AbstractConfigJSDriver<any, any>,
   Shapes extends ConfigJSOptions,
 > {
   /** Internal cache */
@@ -60,8 +63,8 @@ export class ConfigJS<
   /**
    * Indicates whether the driver operates asynchronously
    */
-  public readonly async: ConfigDriver["async"];
-
+  public readonly async: ConfigDriver['prototype']['async'];
+  public driver: ConfigDriver['prototype'];
   /**
    * The shapes structure defining the configuration schema
    */
@@ -73,9 +76,11 @@ export class ConfigJS<
    * @param shapes - The nested shapes structure defining the configuration schema
    */
   constructor(
-    public readonly driver: ConfigDriver & { async: ConfigDriver["async"] },
+    driver: ConfigDriver,
     shapes: Shapes,
   ) {
+    //@ts-expect-error ignore abstract call error
+    this.driver = new driver(this);
     processShapes(shapes as never);
     this.shapes = shapes;
     this.async = this.driver.async;
@@ -87,11 +92,10 @@ export class ConfigJS<
    * @returns The shape instance for the specified path
    * @throws If the path is invalid or doesn't point to a configuration property
    */
+  //@ts-ignore ignore
   public getSchema<Path extends ConfigJSPaths<Shapes>>(
     path: Path,
-  ): Shapes[Path] extends AbstractShape<any>
-    ? Shapes[Path]
-    : AbstractShape<any> {
+  ): If<ConfigJSResolvePath<Shapes, Path> extends AAbstractShape<any> ? true : false, ConfigJSResolvePath<Shapes, Path>, AAbstractShape<any>> {
     const parts = path.split(".");
     let current: any = this.shapes;
 
@@ -112,7 +116,7 @@ export class ConfigJS<
   /**
    * Gets the driver's configuration options
    */
-  public get config() {
+  public get config(): ConfigDriver['prototype']['config'] {
     return this.driver.config;
   }
 
@@ -129,8 +133,9 @@ export class ConfigJS<
    * @returns The raw configuration value
    */
   public conf<Path extends ConfigJSPaths<Shapes>>(path: Path) {
+    //@ts-ignore ignore
     const schema = this.getSchema(path);
-    return schema.conf();
+    return schema.conf() as ReturnType<typeof schema.conf>;
   }
 
   /**
@@ -140,8 +145,8 @@ export class ConfigJS<
    */
   public get<Path extends ConfigJSPaths<Shapes>>(path: Path) {
     const schema = this.getSchema(path);
-    return this.driver.get.bind(this)(schema as never) as ConfigJSResolver<
-      ConfigDriver["async"],
+    return this.driver.get(schema as never) as ConfigJSResolver<
+      ConfigDriver['prototype']["async"],
       ConfigJSResource<Shapes, Path>
     >;
   }
@@ -181,10 +186,10 @@ export class ConfigJS<
       {} as Partial<typeof this.shapes>,
     );
 
-    return this.driver.insert.bind(this)(
+    return this.driver.insert(
       filtered,
       values as never,
-    ) as ConfigJSResolver<ConfigDriver["async"], boolean>;
+    ) as ConfigJSResolver<ConfigDriver['prototype']["async"], boolean>;
   }
 
   /**
@@ -207,8 +212,8 @@ export class ConfigJS<
     if (current instanceof AbstractShape) {
       throw `[ConfigJS]: Property "${path}" is not a root property`;
     }
-    return this.driver.root.bind(this)(current) as ConfigJSResolver<
-      ConfigDriver["async"],
+    return this.driver.root(current) as ConfigJSResolver<
+      ConfigDriver['prototype']["async"],
       inferType<Shapes[Path]>
     >;
   }
@@ -218,10 +223,10 @@ export class ConfigJS<
    * @returns All configuration values (type depends on driver's async flag)
    */
   public all() {
-    return this.driver.root.bind(this)(
+    return this.driver.root(
       this.shapes as never,
     ) as ConfigJSResolver<
-      ConfigDriver["async"],
+      ConfigDriver['prototype']["async"],
       inferType<Shapes>
     >;
   }
@@ -242,10 +247,10 @@ export class ConfigJS<
       {} as Partial<typeof this.shapes>,
     );
 
-    return this.driver.insert.bind(this)(
+    return this.driver.insert(
       filtered as never,
       values as never,
-    ) as ConfigJSResolver<ConfigDriver["async"], boolean>;
+    ) as ConfigJSResolver<ConfigDriver['prototype']["async"], boolean>;
   }
 
   /**
@@ -259,10 +264,10 @@ export class ConfigJS<
     value: ConfigJSResource<Shapes, Path>,
   ) {
     const schema = this.getSchema(path);
-    return this.driver.set.bind(this)(
+    return this.driver.set(
       schema as never,
       value as never,
-    ) as ConfigJSResolver<ConfigDriver["async"], ConfigJSResource<Shapes, Path>>;
+    ) as ConfigJSResolver<ConfigDriver['prototype']["async"], ConfigJSResource<Shapes, Path>>;
   }
 
   /**
@@ -272,7 +277,7 @@ export class ConfigJS<
    */
   public del<Path extends ConfigJSPaths<Shapes>>(path: Path) {
     const schema = this.getSchema(path);
-    return this.driver.del.bind(this)(schema as never);
+    return this.driver.del(schema as never);
   }
 
   /**
@@ -304,7 +309,7 @@ export class ConfigJS<
    */
   public has<Path extends ConfigJSPaths<Shapes>>(...ConfigJSPaths: Path[]) {
     const schemas = ConfigJSPaths.map((p) => this.getSchema(p));
-    return this.driver.has.bind(this)(...(schemas as never[]));
+    return this.driver.has(...(schemas as never[]));
   }
 
   /**
@@ -312,9 +317,12 @@ export class ConfigJS<
    * @param opts - Optional driver-specific configuration options
    * @returns Operation result (type depends on driver's async flag)
    */
-  public load<DriverConfig extends ConfigDriver["config"]>(
+  public load<DriverConfig extends ConfigDriver['prototype']["config"]>(
     opts: Partial<DriverConfig> = {},
   ) {
+    this.cached = {};
+    if ('cache' in this.driver) this.driver.cache = {};
+    if ('cached' in this.driver) this.driver.cached = {};
     this.config = {
       ...this.config,
       ...opts,
@@ -330,7 +338,7 @@ export class ConfigJS<
       );
     };
 
-    return this.driver.load.bind(this)(getAllShapes(this.shapes) as never);
+    return this.driver.load(getAllShapes(this.shapes) as never);
   }
 
   /**
@@ -348,6 +356,6 @@ export class ConfigJS<
       );
     };
 
-    return this.driver.save.bind(this)(getAllShapes(this.shapes) as never);
+    return this.driver.save(getAllShapes(this.shapes) as never);
   }
 }

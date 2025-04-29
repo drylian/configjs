@@ -135,7 +135,7 @@ export class RecordShape<K extends string | number | symbol, V extends AbstractS
         return this;
     }
     //@ts-expect-error recursive
-    public parse(val: unknown): inferType<t.RecordShape<K,V>> {
+    public parse(val: unknown): inferType<t.RecordShape<K, V>> {
         return ImportantCheck.bind(this as never)(super.parse(val)) as never
     }
 }
@@ -158,7 +158,7 @@ export class ObjectShape<T extends Record<string, PrimitiveShapes>> extends t.Ob
     }
     //@ts-expect-error ignore injected extends
     public parse(val: unknown): inferType<t.ObjectShape<T>> {
-        return ImportantCheck.bind(this as never)(super.parse(val))as never
+        return ImportantCheck.bind(this as never)(super.parse(val)) as never
     }
 }
 
@@ -229,6 +229,18 @@ export class UnionShape<T extends PrimitiveShapes[]> extends t.UnionShape<T> {
     }
 }
 
+
+export type ConfigPrimitives =
+    StringShape
+    | NumberShape
+    | ObjectShape<any>
+    | EnumShape<any>
+    | BooleanShape
+    | ArrayShape<any>
+    | RecordShape<any, any>
+    | UnionShape<any>
+    | AnyShape<any>
+    | AbstractShape<any>
 function Enum<const T extends readonly (string | number | boolean)[]>(
     keys: T
 ): EnumShape<T[number]>;

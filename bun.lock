@@ -4,7 +4,7 @@
     "": {
       "name": "config-js",
       "dependencies": {
-        "@caeljs/tsh": "^1.1.2",
+        "@caeljs/tsh": "^1.1.3",
       },
       "devDependencies": {
         "@types/bun": "^1.2.10",

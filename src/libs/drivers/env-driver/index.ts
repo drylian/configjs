@@ -1,5 +1,5 @@
-import type { ConfigJS } from "../../ConfigJS";
-import { AbstractConfigJSDriver } from "../driver";
+import type { ConfigJS } from "../../../ConfigJS";
+import { AbstractConfigJSDriver } from "../../driver";
 import {
     BooleanShape,
     StringShape,
@@ -10,57 +10,52 @@ import {
     AbstractShape,
     type InferShapeType
 } from '@caeljs/tsh';
-import { readFileSync, writeFileSync, statSync, existsSync } from "fs";
-import { ImportantCheck, type ConfigPrimitives } from "../../shapes";
+import { readFileSync, writeFileSync, statSync } from "fs";
+import { ImportantCheck, type ConfigPrimitives } from "../../../shapes";
+import { env } from "./env";
 
-export type JsonDriverConfiguration = {
+export type EnvDriverConfiguration = {
     filepath: string;
     processEnv: boolean;
     cached: boolean;
     cacheTime?: number;
     autoRefresh?: boolean;
-    pretty?: boolean | number; // Added pretty option
 };
 
-export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfiguration> {
+export class EnvDriver extends AbstractConfigJSDriver<false, EnvDriverConfiguration> {
     public readonly async = false as const;
     public supported = [StringShape, NumberShape, EnumShape, ArrayShape, BooleanShape] as never;
 
     private cache: Record<string, any> = {};
-    private lastCacheUpdate = 0;
-    private lastFileCheck = 0;
-    private fileModifiedTime = 0;
+    private lastCacheUpdate: number = 0;
+    private lastFileCheck: number = 0;
+    private fileModifiedTime: number = 0;
 
     constructor(ins: ConfigJS<typeof AbstractConfigJSDriver<boolean, any>, any>) {
         super(ins, {
-            filepath: "config.json",
+            filepath: ".env",
             cached: true,
             processEnv: typeof Bun !== "undefined",
             cacheTime: 1000 * 60 * 5,
-            autoRefresh: true,
-            pretty: 2 // Default to 2-space indentation
+            autoRefresh: true
         });
-        
+
         if (this.config.cached) {
             this.loadCache(true);
         }
     }
 
-    private stringify(data: any): string {
-        const spaces = typeof this.config.pretty === 'number' 
-            ? this.config.pretty 
-            : this.config.pretty ? 2 : undefined;
-        return JSON.stringify(data, null, spaces);
-    }
-
     private loadCache(force = false): void {
         const now = Date.now();
+
         if (!force && !this.isCacheExpired() &&
-            (!this.config.autoRefresh || !this.hasFileChanged())) return;
+            (!this.config.autoRefresh || !this.hasFileChanged())) {
+            return;
+        }
 
         try {
             const content = readFileSync(this.config.filepath, "utf8");
-            this.cache = JSON.parse(content);
+            this.cache = env.parse(content);
             this.lastCacheUpdate = now;
             if (this.config.autoRefresh) this.updateFileStats();
         } catch {
@@ -76,8 +71,10 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
 
     private hasFileChanged(): boolean {
         if (!this.config.autoRefresh) return false;
+
         const now = Date.now();
         if (now - this.lastFileCheck < 1000) return false;
+
         this.lastFileCheck = now;
         try {
             const stats = statSync(this.config.filepath);
@@ -103,7 +100,7 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
 
     save(): boolean {
         if (this.config.cached) {
-            writeFileSync(this.config.filepath, this.stringify(this.cache), "utf8");
+            writeFileSync(this.config.filepath, env.stringify(this.cache), "utf8");
             this.lastCacheUpdate = Date.now();
             if (this.config.autoRefresh) this.updateFileStats();
         }
@@ -111,20 +108,19 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
     }
 
     del(shape: ConfigPrimitives): boolean {
-        const key = shape._prop;
-
         if (this.config.cached) {
             this.loadCache();
-            delete this.cache[key];
+            delete this.cache[shape._prop];
             this.save();
         } else {
-            const parsed = JSON.parse(readFileSync(this.config.filepath, "utf8"));
-            delete parsed[key];
-            writeFileSync(this.config.filepath, this.stringify(parsed), "utf8");
+            const content = readFileSync(this.config.filepath, "utf8");
+            const parsed = env.parse(content);
+            delete parsed[shape._prop];
+            writeFileSync(this.config.filepath, env.stringify(parsed), "utf8");
         }
 
         if (this.config.processEnv) {
-            delete process.env[key];
+            delete process.env[shape._prop];
         }
 
         return true;
@@ -133,48 +129,50 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
     get(shape: ConfigPrimitives) {
         const conf = shape.conf();
 
-        const data = this.config.cached
+        const source = this.config.cached
             ? (this.loadCache(), this.cache)
-            : JSON.parse(readFileSync(this.config.filepath, "utf8"));
+            : env.parse(readFileSync(this.config.filepath, "utf8"));
 
-        const rawValue = data[conf.prop] ?? data[(conf as any).key];
+        const rawValue = source[conf.prop] ?? source[(conf as any).key];
         if (rawValue === undefined) return getShapeDefault(shape);
 
         try {
             return shape.parse(rawValue);
         } catch (err) {
-            console.warn(`[JsonDriver] Error parsing "${conf.prop}": ${err instanceof Error ? err.message : err}`);
+            console.warn(`[EnvDriver] Error parsing "${conf.prop}": ${err instanceof Error ? err.message : err}`);
             return getShapeDefault(shape);
         }
     }
 
     set(shape: ConfigPrimitives, value: InferShapeType<ConfigPrimitives>) {
         if (!this.check(shape)) {
-            console.warn(`[JsonDriver] Unsupported shape: ${shape._prop}`);
+            console.warn(`[EnvDriver] Unsupported shape: ${shape._prop}`);
             return value;
         }
 
-        const parsed = shape.parse(value);
+        const parsedValue = shape.parse(value);
+        const serialized = env.stringify(parsedValue);
 
         if (this.config.cached) {
             this.loadCache();
-            this.cache[shape._prop] = parsed;
+            this.cache[shape._prop] = parsedValue;
             this.save();
         } else {
-            const parsedFile = JSON.parse(readFileSync(this.config.filepath, "utf8"));
-            parsedFile[shape._prop] = parsed;
-            writeFileSync(this.config.filepath, this.stringify(parsedFile), "utf8");
+            const content = readFileSync(this.config.filepath, "utf8");
+            const parsed = env.parse(content);
+            parsed[shape._prop] = parsedValue;
+            writeFileSync(this.config.filepath, env.stringify(parsed), "utf8");
         }
 
-        return parsed;
+        return parsedValue;
     }
 
     has(...shapes: ConfigPrimitives[]): boolean {
         const data = this.config.cached
             ? (this.loadCache(), this.cache)
-            : JSON.parse(readFileSync(this.config.filepath, "utf8"));
+            : env.parse(readFileSync(this.config.filepath, "utf8"));
 
-        return shapes.every(shape => shape._prop in data && !!data[shape._prop]);
+        return shapes.every(shape => shape._prop in data);
     }
 
     insert(shapeMap: Record<string, ConfigPrimitives>, values: Record<string, any>): boolean {
@@ -182,40 +180,52 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
 
         const target = this.config.cached
             ? this.cache
-            : JSON.parse(readFileSync(this.config.filepath, "utf8"));
+            : env.parse(readFileSync(this.config.filepath, "utf8"));
 
-        const process = (
+        const processValue = (shape: ConfigPrimitives, value: any): any => {
+            if (!this.check(shape)) {
+                console.warn("[EnvDriver] Unsupported shape");
+                return undefined;
+            }
+            return shape.parse(value);
+        };
+
+        const processLevel = (
             shapeLevel: Record<string, ConfigPrimitives>,
             valueLevel: Record<string, any>,
             prefix = ""
         ) => {
             for (const key in valueLevel) {
                 const shape = shapeLevel[key];
-                const value = valueLevel[key];
+                const val = valueLevel[key];
+
                 if (!shape) continue;
 
                 if (typeof shape === "object" && !(shape instanceof AbstractShape)) {
-                    process(shape, value, `${prefix}${key}.`);
+                    processLevel(shape, val, `${prefix}${key}.`);
                 } else {
-                    target[shape.conf().prop] = shape.parse(value);
+                    const parsed = processValue(shape, val);
+                    const propName = shape.conf().prop;
+                    target[propName] = parsed;
                 }
             }
         };
 
-        process(shapeMap, values);
+        processLevel(shapeMap, values);
 
-        if (this.config.cached) {
-            this.save();
+        if (!this.config.cached) {
+            writeFileSync(this.config.filepath, env.stringify(target), "utf8");
         } else {
-            writeFileSync(this.config.filepath, this.stringify(target), "utf8");
+            this.save();
         }
 
         return true;
     }
 
-    root(shapeMap: Record<string, ConfigPrimitives>, contents?: Record<string, any>): Record<string, any> {
+    root(shapeMap: Record<string, ConfigPrimitives>, contents?: Record<string, string>): Record<string, any> {
         if (this.config.cached && !contents) this.loadCache();
-        const data = contents ?? (this.config.cached ? this.cache : JSON.parse(readFileSync(this.config.filepath, "utf8")));
+
+        const data = contents ?? (this.config.cached ? this.cache : env.parse(readFileSync(this.config.filepath, "utf8")));
 
         const parseVal = (shape: ConfigPrimitives, raw: any): any => {
             try {
@@ -225,33 +235,31 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
             }
         };
 
-        const process = (
+        const processLevel = (
             shapeLevel: Record<string, ConfigPrimitives>,
             dataLevel: Record<string, any>,
             prefix = ""
         ): Record<string, any> => {
-            const result: Record<string, any> = {};
+            const level: Record<string, any> = {};
 
             for (const key in shapeLevel) {
                 const shape = shapeLevel[key];
 
                 if (typeof shape === "object" && !(shape instanceof AbstractShape)) {
-                    result[key] = process(shape, dataLevel, `${prefix}${key}.`);
+                    level[key] = processLevel(shape, dataLevel, `${prefix}${key}.`);
                 } else {
-                    result[key] = parseVal(shape, dataLevel[shape.conf().prop]);
+                    const propName = shape.conf().prop;
+                    level[key] = parseVal(shape, dataLevel[propName]);
                 }
             }
 
-            return result;
+            return level;
         };
 
-        return process(shapeMap, data);
+        return processLevel(shapeMap, data);
     }
 
     load(shapes: ConfigPrimitives[]): boolean {
-        if(!existsSync(this.config.filepath) || readFileSync(this.config.filepath,"utf8") == "") {
-            writeFileSync(this.config.filepath, this.stringify({}),"utf8")
-        }
         if (!this.cache) this.cache = {};
         if (this.config.cached) this.loadCache(true);
 
@@ -282,4 +290,4 @@ export class JsonDriver extends AbstractConfigJSDriver<false, JsonDriverConfigur
     }
 }
 
-export const jsonDriver = JsonDriver;
+export const envDriver = EnvDriver;

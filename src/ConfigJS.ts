@@ -106,7 +106,7 @@ export class ConfigJS<
       current = current[part];
     }
 
-    if (!(current instanceof AbstractShape)) {
+    if (!(current instanceof AAbstractShape)) {
       throw `[ConfigJS]: Property "${path}" is not a configuration property`;
     }
 

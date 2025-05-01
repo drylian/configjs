@@ -1,6 +1,6 @@
 import { t, TshShapeError, type InferShapeType, type inferType, type InferUnionType, type PrimitiveShapes, type TshViewer } from '@caeljs/tsh';
 
-export function ImportantCheck<T>(this: AbstractShape<any>, value: T): T {
+export function ImportantCheck<T>(this: ConfigPrimitives, value: T): T {
     if ((typeof value === "undefined" || value === null) && this._important) {
         throw new TshShapeError({
             code: 'IMPORTANT_PROPERTY',
@@ -10,24 +10,6 @@ export function ImportantCheck<T>(this: AbstractShape<any>, value: T): T {
         });
     }
     return value;
-}
-
-export abstract class AbstractShape<T> extends t.AbstractShape<T> {
-    public _prop = "_unconfigured_property";
-    public _save_default = false;
-    public _important = false;
-    public prop(property: string) {
-        this._prop = property;
-        return this;
-    }
-    public save() {
-        this._save_default = true;
-        return this;
-    }
-    public important() {
-        this._important = true;
-        return this;
-    }
 }
 
 export class StringShape extends t.StringShape {
@@ -47,7 +29,7 @@ export class StringShape extends t.StringShape {
         return this;
     }
     public parse(val: unknown): string {
-        //@ts-expect-error ignore injected extends
+                //@ts-expect-error ignore types
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -69,7 +51,7 @@ export class NumberShape extends t.NumberShape {
         return this;
     }
     public parse(val: unknown): number {
-        //@ts-expect-error ignore injected extends
+                //@ts-expect-error ignore types
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
@@ -95,7 +77,7 @@ export class AnyShape<T> extends t.AnyShape<T> {
     }
 }
 
-export class ArrayShape<T extends AbstractShape<any>> extends t.ArrayShape<T> {
+export class ArrayShape<T extends t.AbstractShape<any>> extends t.ArrayShape<T> {
     public _prop = "_unconfigured_property";
     public _save_default = false;
     public _important = false;
@@ -113,12 +95,12 @@ export class ArrayShape<T extends AbstractShape<any>> extends t.ArrayShape<T> {
     }
     //@ts-expect-error ignore injected extends
     public parse(val: unknown): inferType<t.ArrayShape<T>> {
-        //@ts-expect-error ignore injected extends
+        //@ts-expect-error ignore types
         return ImportantCheck.bind(this as never)(super.parse(val))
     }
 }
 
-export class RecordShape<K extends string | number | symbol, V extends AbstractShape<any>> extends t.RecordShape<K, V> {
+export class RecordShape<K extends string | number | symbol, V extends t.AbstractShape<any>> extends t.RecordShape<K, V> {
     public _prop = "_unconfigured_property";
     public _save_default = false;
     public _important = false;
@@ -240,7 +222,7 @@ export type ConfigPrimitives =
     | RecordShape<any, any>
     | UnionShape<any>
     | AnyShape<any>
-    | AbstractShape<any>
+
 function Enum<const T extends readonly (string | number | boolean)[]>(
     keys: T
 ): EnumShape<T[number]>;
@@ -265,8 +247,8 @@ export function number() { return new NumberShape(); }
 export function boolean() { return new BooleanShape(); }
 export function any() { return new AnyShape(); }
 export function object<T extends Record<string, any>>(shape: T) { return new ObjectShape(shape); }
-export function array<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape); }
-export function record<K extends AbstractShape<any>, V extends AbstractShape<any>>(keyShape: K, valueShape: V) {
+export function array<T extends ConfigPrimitives>(shape: T) { return new ArrayShape(shape); }
+export function record<K extends ConfigPrimitives, V extends ConfigPrimitives>(keyShape: K, valueShape: V) {
     return new RecordShape(keyShape, valueShape);
 }
 export function union<T extends PrimitiveShapes[]>(shapes: T) { return new UnionShape(shapes); }
@@ -299,7 +281,7 @@ export function validate<T extends PrimitiveShapes>(value: unknown, shape: T) {
     }
 }
 
-export function isValid<T>(value: unknown, shape: AbstractShape<T>) {
+export function isValid<T>(value: unknown, shape: t.AbstractShape<T>) {
     try {
         shape.parse(value);
         return true;
@@ -317,7 +299,7 @@ export function omit<T extends ObjectShape<any>, K extends keyof InferShapeType<
     return shape.omit(keys);
 }
 
-export function merge<T extends Record<string, AbstractShape<any>>, U extends Record<string, AbstractShape<any>>>(shape1: ObjectShape<T>, shape2: ObjectShape<U>) {
+export function merge<T extends Record<string, ConfigPrimitives>, U extends Record<string, ConfigPrimitives>>(shape1: ObjectShape<T>, shape2: ObjectShape<U>) {
     return shape1.merge(shape2 as never) as unknown as ObjectShape<T & U>;
 }
 
@@ -325,10 +307,10 @@ export function extend<T extends ObjectShape<any>, U extends Record<string, Prim
     return shape.merge(new ObjectShape(extensions) as never) as unknown as ObjectShape<TshViewer<T> & U>;
 }
 // Array utilities
-export function nonEmptyArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).nonEmpty(); }
-export function uniqueArray<T extends AbstractShape<any>>(shape: T) { return new ArrayShape(shape).unique(); }
-export function minLength<T extends AbstractShape<any>>(shape: T, min: number) { return new ArrayShape(shape).min(min); }
-export function maxLength<T extends AbstractShape<any>>(shape: T, max: number) { return new ArrayShape(shape).max(max); }
+export function nonEmptyArray<T extends ConfigPrimitives>(shape: T) { return new ArrayShape(shape).nonEmpty(); }
+export function uniqueArray<T extends ConfigPrimitives>(shape: T) { return new ArrayShape(shape).unique(); }
+export function minLength<T extends ConfigPrimitives>(shape: T, min: number) { return new ArrayShape(shape).min(min); }
+export function maxLength<T extends ConfigPrimitives>(shape: T, max: number) { return new ArrayShape(shape).max(max); }
 
 // String validators
 export function email() { return new StringShape().email(); }

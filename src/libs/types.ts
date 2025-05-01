@@ -1,13 +1,12 @@
 /** Config TYPES **/
 import type { ConfigJS } from "../ConfigJS";
-import type { infer as InferType, AbstractShape as AAbstractShape } from "@caeljs/tsh";
-import type { AbstractShape } from "../shapes";
+import type { infer as InferType, AbstractShape } from "@caeljs/tsh";
 import type { AbstractConfigJSDriver } from "./driver";
 
 export type If<Cond extends boolean, Then, Else> = Cond extends true ? Then : Else;
 
 export type ConfigJSOptions = {
-  [key: string]: AbstractShape<any> | AAbstractShape<any> | ConfigJSOptions;
+  [key: string]: AbstractShape<any> | ConfigJSOptions;
 };
 
 export type ConfigJSResolvePath<T, P extends string> = 
@@ -64,7 +63,7 @@ export type AnyConfigTypedDriver<
 > = {
   async: DriverAsync;
   config: DriverConfig;
-  supported: (new (...any: any) => AbstractShape<any> | AAbstractShape<any>)[];
+  supported: (new (...any: any) => AbstractShape<any>)[];
 
   set(
     this: AnyConfigJS<DriverConfig>,

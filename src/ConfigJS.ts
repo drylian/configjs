@@ -1,3 +1,4 @@
+import { AbstractShape, t } from "@caeljs/tsh";
 import type {
   InferShapeType,
   inferType,
@@ -9,10 +10,9 @@ export * from "./libs/functions";
 export * from "./libs/driver";
 export * from "./libs/drivers";
 import * as c from "./shapes";
-import { AbstractShape } from "./shapes";
+import type { ConfigPrimitives } from "./shapes";
 
 export { c };
-import { t, AbstractShape as AAbstractShape } from "@caeljs/tsh";
 export { t };
 import {
   type ConfigJSOptions,
@@ -95,7 +95,7 @@ export class ConfigJS<
   //@ts-ignore ignore
   public getSchema<Path extends ConfigJSPaths<Shapes>>(
     path: Path,
-  ): If<ConfigJSResolvePath<Shapes, Path> extends AAbstractShape<any> ? true : false, ConfigJSResolvePath<Shapes, Path>, AAbstractShape<any>> {
+  ): If<ConfigJSResolvePath<Shapes, Path> extends AbstractShape<any> ? true : false, ConfigJSResolvePath<Shapes, Path>, AbstractShape<any>> {
     const parts = path.split(".");
     let current: any = this.shapes;
 
@@ -106,7 +106,7 @@ export class ConfigJS<
       current = current[part];
     }
 
-    if (!(current instanceof AAbstractShape)) {
+    if (!(current instanceof AbstractShape)) {
       throw `[ConfigJS]: Property "${path}" is not a configuration property`;
     }
 
@@ -132,12 +132,12 @@ export class ConfigJS<
    * @param path - Dot-notation path to the configuration property
    * @returns The raw configuration value
    */
-  public conf<Path extends ConfigJSPaths<Shapes>>(path: Path) {
+  public conf<Path extends ConfigJSPaths<Shapes>>(path: Path): t.TshConfig<ConfigJSResolvePath<Shapes, Path>> {
     //@ts-ignore ignore
     const schema = this.getSchema(path);
-    return schema.conf() as ReturnType<typeof schema.conf>;
+    //@ts-ignore ignore
+    return schema.conf() as never;
   }
-
   /**
    * Gets a configuration value
    * @param path - Dot-notation path to the configuration property

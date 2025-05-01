@@ -3,10 +3,10 @@ import type { ConfigJS, If } from "../ConfigJS";
 import type { ConfigPrimitives } from "../shapes";
 
 export abstract class AbstractConfigJSDriver<IsAsync extends boolean, Configuration extends object> {
-    public config:Configuration;
-    public ins:ConfigJS<typeof AbstractConfigJSDriver<any,any>, any>;
-    public abstract readonly async:boolean;
-    public supported:ConfigPrimitives[] = [];
+    public config: Configuration;
+    public ins: ConfigJS<typeof AbstractConfigJSDriver<any, any>, any>;
+    public abstract readonly async: boolean;
+    public supported: ConfigPrimitives[] = [];
 
     public check(
         shape: ConfigPrimitives,
@@ -14,7 +14,7 @@ export abstract class AbstractConfigJSDriver<IsAsync extends boolean, Configurat
         return this.supported.some((supported) => shape instanceof (supported as never));
     };
 
-    constructor(instance: ConfigJS<typeof AbstractConfigJSDriver<any,any>, any>, config: Configuration) {
+    constructor(instance: ConfigJS<typeof AbstractConfigJSDriver<any, any>, any>, config: Configuration) {
         this.ins = instance;
         this.config = config;
     }

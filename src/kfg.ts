@@ -1,172 +1,214 @@
-import type { SchemaDefinition, StaticSchema, DeepGet, Paths, RootPaths, inPromise } from "./types";
-import { KfgDriver } from "./kfg-driver";
-import { getProperty, setProperty, deleteProperty, deepMerge } from "./utils/object";
-import { buildTypeBoxSchema, addSmartDefaults, makeSchemaOptional } from "./utils/schema";
-import { Value } from "@sinclair/typebox/value";
 import type { TObject } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { defaultValidationMessage, notLoadedMessage } from "./errors";
+import type { KfgDriver } from "./kfg-driver";
+import type {
+	DeepGet,
+	inPromise,
+	Paths,
+	RootPaths,
+	SchemaDefinition,
+	StaticSchema,
+} from "./types";
+import {
+	deepMerge,
+	deleteProperty,
+	getProperty,
+	setProperty,
+} from "./utils/object";
+import {
+	addSmartDefaults,
+	buildTypeBoxSchema,
+	makeSchemaOptional,
+} from "./utils/schema";
 
-export class Kfg<
-    D extends KfgDriver<any, any>,
-    S extends SchemaDefinition
-> {
-    public readonly "~driver": D;
-    public readonly "~schema": { defined: S, compiled: TObject };
-    private "~lastLoadOptions"?:
-        | (Partial<D["config"]> & { only_importants?: boolean })
-        | undefined;
-    
-    // Internal state
-    public "~cache": Record<string, any> = {};
-    public "~loaded": boolean = false;
+export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition> {
+	public readonly "~driver": D;
+	public readonly "~schema": { defined: S; compiled: TObject };
+	private "~lastLoadOptions"?:
+		| (Partial<D["config"]> & { only_importants?: boolean })
+		| undefined;
 
-    /**
-     * Proxy to access configuration properties directly.
-     * Example: kfg.config.database.port
-     */
-    public readonly config: StaticSchema<S>;
-    public get driver(): D {
-        return this["~driver"];
-    }
+	// Internal state
+	public "~cache": Record<string, any> = {};
+	public "~loaded": boolean = false;
 
-    public get schema(): S {
-        return this["~schema"].defined;
-    }
+	/**
+	 * Proxy to access configuration properties directly.
+	 * Example: kfg.config.database.port
+	 */
+	public readonly config: StaticSchema<S>;
+	public get driver(): D {
+		return this["~driver"];
+	}
 
-    constructor(driver: D, schema: S) {
-        this["~driver"] = driver;
-        
-        const compiled = buildTypeBoxSchema(schema);
-        addSmartDefaults(compiled);
-        
-        this["~schema"] = {
-            defined: schema,
-            compiled: compiled
-        };
+	public get schema(): S {
+		return this["~schema"].defined;
+	}
 
-        // Initialize proxy
-        this.config = new Proxy({}, {
-            get: (_target, prop) => {
-                if (!this["~loaded"]) {
-                    throw new Error(notLoadedMessage("reading from config proxy"));
-                }
-                return Reflect.get(this["~cache"], prop);
-            },
-            set: () => {
-                throw new Error("[Kfg] Config is read-only via proxy. Use .set() to modify and persist.");
-            },
-            ownKeys: () => {
-                return this["~loaded"] ? Reflect.ownKeys(this["~cache"]) : [];
-            },
-            getOwnPropertyDescriptor: (_target, prop) => {
-                return this["~loaded"] ? Reflect.getOwnPropertyDescriptor(this["~cache"], prop) : undefined;
-            }
-        }) as StaticSchema<S>;
-    }
+	constructor(driver: D, schema: S) {
+		this["~driver"] = driver;
 
-    /**
-     * Loads the configuration from the driver.
-     */
+		const compiled = buildTypeBoxSchema(schema);
+		addSmartDefaults(compiled);
+
+		this["~schema"] = {
+			defined: schema,
+			compiled: compiled,
+		};
+
+		// Initialize proxy
+		this.config = new Proxy(
+			{},
+			{
+				get: (_target, prop) => {
+					if (!this["~loaded"]) {
+						throw new Error(notLoadedMessage("reading from config proxy"));
+					}
+					return Reflect.get(this["~cache"], prop);
+				},
+				set: () => {
+					throw new Error(
+						"[Kfg] Config is read-only via proxy. Use .set() to modify and persist.",
+					);
+				},
+				ownKeys: () => {
+					return this["~loaded"] ? Reflect.ownKeys(this["~cache"]) : [];
+				},
+				getOwnPropertyDescriptor: (_target, prop) => {
+					return this["~loaded"]
+						? Reflect.getOwnPropertyDescriptor(this["~cache"], prop)
+						: undefined;
+				},
+			},
+		) as StaticSchema<S>;
+	}
+
+	/**
+	 * Loads the configuration from the driver.
+	 */
 	public load(
 		options?: Partial<D["config"]> & {
 			only_importants?: boolean;
 		},
 	): inPromise<D["async"], void> {
-        this["~lastLoadOptions"] = options;
-        if (options) {
-            const { only_importants: _onlyImportants, ...driverConfig } = options as any;
-            this["~driver"].config = {
-                ...this["~driver"].config,
-                ...driverConfig,
-            };
-        }
+		this["~lastLoadOptions"] = options;
+		if (options) {
+			const { only_importants: _onlyImportants, ...driverConfig } =
+				options as any;
+			this["~driver"].config = {
+				...this["~driver"].config,
+				...driverConfig,
+			};
+		}
 
-        let schemaToLoad = this["~schema"].defined;
-        let compiled = buildTypeBoxSchema(schemaToLoad);
-        addSmartDefaults(compiled);
+		const schemaToLoad = options?.only_importants
+			? (makeSchemaOptional(this["~schema"].defined) as S)
+			: this["~schema"].defined;
+		const compiled = buildTypeBoxSchema(schemaToLoad);
+		addSmartDefaults(compiled);
+		this["~schema"].compiled = compiled;
 
-        if (options?.only_importants) {
-            schemaToLoad = makeSchemaOptional(schemaToLoad) as S;
-            compiled = buildTypeBoxSchema(schemaToLoad);
-            addSmartDefaults(compiled);
-        }
-        this["~schema"].compiled = compiled;
+		const result = this["~driver"].load(schemaToLoad);
 
-        const result = this["~driver"].load(schemaToLoad);
+		const process = (rawData: any) => {
+			const cleanData = this.validateAndClean(
+				rawData,
+				this["~schema"].compiled,
+				true,
+			);
+			this["~cache"] = cleanData;
+			this["~loaded"] = true;
+		};
 
-        const process = (rawData: any) => {
-             const cleanData = this.validateAndClean(rawData, this["~schema"].compiled);
-             this["~cache"] = cleanData;
-             this["~loaded"] = true;
-        };
+		if (this["~driver"].async) {
+			return (result as Promise<any>).then(process) as any;
+		}
 
-        if (this["~driver"].async) {
-            return (result as Promise<any>).then(process) as any;
-        }
+		process(result);
+		return undefined as any;
+	}
 
-        process(result);
-        return undefined as any;
-    }
-
-    public reload(
+	public reload(
 		options?: Partial<D["config"]> & {
 			only_importants?: boolean;
 		},
 	): inPromise<D["async"], void> {
-        this["~loaded"] = false;
-        const nextOptions = options ?? this["~lastLoadOptions"];
-        return this.load(nextOptions);
-    }
+		this["~loaded"] = false;
+		const nextOptions = options ?? this["~lastLoadOptions"];
+		return this.load(nextOptions);
+	}
 
-    public save(): inPromise<D["async"], void> {
-        if (!this["~loaded"]) throw new Error(notLoadedMessage("saving"));
-        return this["~driver"].save(this["~cache"]) as any;
-    }
+	public save(): inPromise<D["async"], void> {
+		if (!this["~loaded"]) throw new Error(notLoadedMessage("saving"));
+		return this["~driver"].save(this["~cache"]) as any;
+	}
 
-    public get<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<StaticSchema<S>, P> {
-        if (!this["~loaded"]) throw new Error(notLoadedMessage(`reading "${String(path)}"`));
-        return getProperty(this["~cache"], path as string);
-    }
+	public get<P extends Paths<StaticSchema<S>>>(
+		path: P,
+	): DeepGet<StaticSchema<S>, P> {
+		if (!this["~loaded"])
+			throw new Error(notLoadedMessage(`reading "${String(path)}"`));
+		return getProperty(this["~cache"], path as string);
+	}
 
-    public root<P extends RootPaths<StaticSchema<S>>>(path: P): DeepGet<StaticSchema<S>, P> {
-        return this.get(path as any) as DeepGet<StaticSchema<S>, P>;
-    }
+	public root<P extends RootPaths<StaticSchema<S>>>(
+		path: P,
+	): DeepGet<StaticSchema<S>, P> {
+		return this.get(path as any) as DeepGet<StaticSchema<S>, P>;
+	}
 
-    public set<P extends Paths<StaticSchema<S>>>(
-        path: P, 
-        value: DeepGet<StaticSchema<S>, P>,
-        descriptionOrOptions?: string | { description?: string }
-    ): inPromise<D["async"], void> {
-        if (!this["~loaded"]) throw new Error(notLoadedMessage(`writing "${String(path)}"`));
-        
-        let description =
-            typeof descriptionOrOptions === "string"
-                ? descriptionOrOptions
-                : descriptionOrOptions?.description;
-        
-        if (!description) {
-            const schemaDef = getProperty(this["~schema"].defined, path as string);
-            if (schemaDef?.description) {
-                description = schemaDef.description;
-            }
-        }
-        
-        const original = JSON.parse(JSON.stringify(this["~cache"]));
-        setProperty(this["~cache"], path as string, value);
-        
-        try {
-            this["~cache"] = this.validateAndClean(this["~cache"], this["~schema"].compiled);
-        } catch (e) {
-            this["~cache"] = original;
-            throw e;
-        }
+	public set<P extends Paths<StaticSchema<S>>>(
+		path: P,
+		value: DeepGet<StaticSchema<S>, P>,
+		descriptionOrOptions?: string | { description?: string },
+	): inPromise<D["async"], void> {
+		if (!this["~loaded"])
+			throw new Error(notLoadedMessage(`writing "${String(path)}"`));
 
-        if (this["~driver"].update) {
-            return this["~driver"].update(path as string, value, description) as any;
-        } else {
-            return this["~driver"].save(this["~cache"], { path: path as string, description }) as any;
-        }
-    }
+		let description =
+			typeof descriptionOrOptions === "string"
+				? descriptionOrOptions
+				: descriptionOrOptions?.description;
+
+		if (!description) {
+			const schemaDef = this.getSchemaAtPath(path as string);
+			if (schemaDef?.description) {
+				description = schemaDef.description;
+			}
+		}
+
+		// Transactional mode: apply on the freshest persisted state so concurrent
+		// writers don't clobber each other (per-key comment is dropped here).
+		if (this.mutateSetEnabled()) {
+			return this.runMutation((draft) => {
+				setProperty(draft as any, path as string, value);
+				return draft as any;
+			});
+		}
+
+		const original = structuredClone(this["~cache"]);
+		setProperty(this["~cache"], path as string, value);
+
+		try {
+			this["~cache"] = this.validateAndClean(
+				this["~cache"],
+				this["~schema"].compiled,
+			);
+		} catch (e) {
+			this["~cache"] = original;
+			throw e;
+		}
+
+		if (this["~driver"].update) {
+			return this["~driver"].update(path as string, value, description) as any;
+		} else {
+			return this["~driver"].save(this["~cache"], {
+				path: path as string,
+				description,
+			}) as any;
+		}
+	}
 
 	public insert<P extends RootPaths<StaticSchema<S>>>(
 		path: P,
@@ -175,119 +217,308 @@ export class Kfg<
 		if (!this["~loaded"]) {
 			throw new Error(notLoadedMessage(`inserting into "${String(path)}"`));
 		}
-        
-        const currentObject = getProperty(this["~cache"], path as string);
-        if (typeof currentObject !== "object" || currentObject === null) {
-            throw new Error(`Cannot insert into non-object at path: ${String(path)}`);
-        }
-        
-        const original = JSON.parse(JSON.stringify(this["~cache"]));
-        Object.assign(currentObject, partial);
-        
-        try {
-            this["~cache"] = this.validateAndClean(this["~cache"], this["~schema"].compiled);
-        } catch (e) {
-            this["~cache"] = original;
-            throw e;
-        }
-        
-        if (this["~driver"].update) {
-            return this["~driver"].update(path as string, currentObject) as any;
-        } else {
-            return this["~driver"].save(this["~cache"]) as any;
-        }
+
+		const currentObject = getProperty(this["~cache"], path as string);
+		if (typeof currentObject !== "object" || currentObject === null) {
+			throw new Error(`Cannot insert into non-object at path: ${String(path)}`);
+		}
+
+		if (this.mutateSetEnabled()) {
+			return this.runMutation((draft) => {
+				const target = getProperty(draft as any, path as string);
+				if (typeof target !== "object" || target === null) {
+					throw new Error(
+						`Cannot insert into non-object at path: ${String(path)}`,
+					);
+				}
+				Object.assign(target, partial);
+				return draft as any;
+			});
+		}
+
+		const original = structuredClone(this["~cache"]);
+		Object.assign(currentObject, partial);
+
+		try {
+			this["~cache"] = this.validateAndClean(
+				this["~cache"],
+				this["~schema"].compiled,
+			);
+		} catch (e) {
+			this["~cache"] = original;
+			throw e;
+		}
+
+		if (this["~driver"].update) {
+			return this["~driver"].update(path as string, currentObject) as any;
+		} else {
+			return this["~driver"].save(this["~cache"]) as any;
+		}
 	}
 
 	public inject(data: Partial<StaticSchema<S>>): inPromise<D["async"], void> {
-        if (!this["~loaded"]) {
+		if (!this["~loaded"]) {
 			throw new Error(notLoadedMessage("injecting data"));
 		}
-        
-        const original = JSON.parse(JSON.stringify(this["~cache"]));
-        this["~cache"] = deepMerge(this["~cache"], data);
-        
-        try {
-            this["~cache"] = this.validateAndClean(this["~cache"], this["~schema"].compiled);
-        } catch (e) {
-            this["~cache"] = original;
-            throw e;
-        }
-        
-        return this["~driver"].save(this["~cache"]) as any;
-    }
 
-    public del<P extends Paths<StaticSchema<S>>>(path: P): inPromise<D["async"], void> {
-        if (!this["~loaded"]) throw new Error(notLoadedMessage(`deleting "${String(path)}"`));
-        
-        const original = JSON.parse(JSON.stringify(this["~cache"]));
-        const deleted = deleteProperty(this["~cache"], path as string);
-        
-        if (!deleted) return (this["~driver"].async ? Promise.resolve() : undefined) as any;
+		if (this.mutateSetEnabled()) {
+			return this.runMutation((draft) => deepMerge(draft as any, data) as any);
+		}
 
-        try {
-            this["~cache"] = this.validateAndClean(this["~cache"], this["~schema"].compiled);
-        } catch (e) {
-             this["~cache"] = original;
-             throw e;
-        }
-        
-        if (this["~driver"].delete) {
-            return this["~driver"].delete(path as string) as any;
-        } else {
-            return this["~driver"].save(this["~cache"]) as any;
-        }
-    }
+		const original = structuredClone(this["~cache"]);
+		this["~cache"] = deepMerge(this["~cache"], data);
 
-    public has<P extends Paths<StaticSchema<S>>>(...paths: P[]): boolean {
-        if (!this["~loaded"]) {
-            throw new Error(notLoadedMessage("checking paths"));
-        }
-        return paths.every((path) => getProperty(this["~cache"], path as string) !== undefined);
-    }
+		try {
+			this["~cache"] = this.validateAndClean(
+				this["~cache"],
+				this["~schema"].compiled,
+			);
+		} catch (e) {
+			this["~cache"] = original;
+			throw e;
+		}
+
+		return this["~driver"].save(this["~cache"]) as any;
+	}
+
+	public del<P extends Paths<StaticSchema<S>>>(
+		path: P,
+	): inPromise<D["async"], void> {
+		if (!this["~loaded"])
+			throw new Error(notLoadedMessage(`deleting "${String(path)}"`));
+
+		if (this.mutateSetEnabled()) {
+			return this.runMutation((draft) => {
+				deleteProperty(draft as any, path as string);
+				return draft as any;
+			});
+		}
+
+		const original = structuredClone(this["~cache"]);
+		const deleted = deleteProperty(this["~cache"], path as string);
+
+		if (!deleted)
+			return (this["~driver"].async ? Promise.resolve() : undefined) as any;
+
+		try {
+			this["~cache"] = this.validateAndClean(
+				this["~cache"],
+				this["~schema"].compiled,
+			);
+		} catch (e) {
+			this["~cache"] = original;
+			throw e;
+		}
+
+		if (this["~driver"].delete) {
+			return this["~driver"].delete(path as string) as any;
+		} else {
+			return this["~driver"].save(this["~cache"]) as any;
+		}
+	}
+
+	/**
+	 * Transactional read-modify-write. Reads the latest persisted state, runs
+	 * `fn` to mutate it, validates, and persists — atomically across processes
+	 * when the driver supports it (preventing lost updates from concurrent
+	 * writers). Falls back to load→mutate→save when it does not.
+	 * `fn` may mutate the draft in place or return a replacement.
+	 */
+	public mutate(
+		fn: (draft: StaticSchema<S>) => StaticSchema<S> | undefined,
+	): inPromise<D["async"], void> {
+		return this.runMutation((draft) => (fn(draft) ?? draft) as any);
+	}
+
+	/** Whether the driver opted into transactional set() via `mutate_set: true`. */
+	private mutateSetEnabled(): boolean {
+		const driver = this["~driver"] as any;
+		return (
+			!!driver.config?.mutate_set && typeof driver.transaction === "function"
+		);
+	}
+
+	/**
+	 * Core transactional read-modify-write. `apply` receives the latest persisted
+	 * draft (validated) and returns the next state. Uses the driver's atomic
+	 * transaction when available, otherwise a best-effort load→apply→save.
+	 */
+	private runMutation(
+		apply: (draft: StaticSchema<S>) => Record<string, any>,
+	): inPromise<D["async"], void> {
+		const driver = this["~driver"] as any;
+
+		if (typeof driver.transaction === "function") {
+			const wrapped = (raw: Record<string, any>) => {
+				const clean = this.validateAndClean(raw, this["~schema"].compiled);
+				const result = apply(clean as StaticSchema<S>);
+				const revalidated = this.validateAndClean(
+					result,
+					this["~schema"].compiled,
+				);
+				this["~cache"] = revalidated;
+				this["~loaded"] = true;
+				return revalidated;
+			};
+			return driver.transaction(this["~schema"].defined, wrapped) as any;
+		}
+
+		// Fallback: best-effort (not atomic across processes).
+		const run = () => {
+			const draft = structuredClone(this["~cache"]);
+			const result = apply(draft as StaticSchema<S>);
+			this["~cache"] = this.validateAndClean(result, this["~schema"].compiled);
+			return this["~driver"].save(this["~cache"]);
+		};
+
+		if (this["~loaded"]) return run() as any;
+		const loaded = this.load();
+		if (this["~driver"].async) {
+			return (loaded as Promise<void>).then(run) as any;
+		}
+		return run() as any;
+	}
+
+	public has<P extends Paths<StaticSchema<S>>>(...paths: P[]): boolean {
+		if (!this["~loaded"]) {
+			throw new Error(notLoadedMessage("checking paths"));
+		}
+		return paths.every(
+			(path) => getProperty(this["~cache"], path as string) !== undefined,
+		);
+	}
 
 	public conf<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {
 		if (!this["~loaded"]) {
 			throw new Error(notLoadedMessage(`reading schema for "${String(path)}"`));
 		}
-		return getProperty(this["~schema"].defined, path as string) as DeepGet<S, P>;
+		return getProperty(this["~schema"].defined, path as string) as DeepGet<
+			S,
+			P
+		>;
 	}
 
-    public schematic<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {
-        return this.conf(path);
-    }
+	public schematic<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {
+		return this.conf(path);
+	}
 
-    private validateAndClean(data: any, schema: TObject): any {
-        const current = Value.Default(schema, data) as any;
-        Value.Convert(schema, current);
+	/**
+	 * Resolves a schema node by dot path, descending through `.properties`
+	 * when a segment is a compiled TypeBox object (e.g. created with c.Object).
+	 */
+	private getSchemaAtPath(path: string): any {
+		let node: any = this["~schema"].defined;
+		for (const segment of path.split(".")) {
+			if (node === undefined || node === null) return undefined;
+			if (
+				node[Symbol.for("TypeBox.Kind")] &&
+				node.type === "object" &&
+				node.properties
+			) {
+				node = node.properties[segment];
+			} else {
+				node = node[segment];
+			}
+		}
+		return node;
+	}
 
-        if (!Value.Check(schema, current)) {
-            const errors = [...Value.Errors(schema, current)];
+	private validateAndClean(
+		data: any,
+		schema: TObject,
+		allowForceExit = false,
+	): any {
+		const current = Value.Default(schema, data) as any;
+		Value.Convert(schema, current);
 
-            let message = defaultValidationMessage(errors);
-            if (this["~driver"].formatError) {
-                const customMessage = this["~driver"].formatError(errors);
-                if (customMessage) {
-                    message = customMessage;
-                }
-            }
+		if (!Value.Check(schema, current)) {
+			const errors = [...Value.Errors(schema, current)];
 
-            if (this["~driver"].forceExit) {
-                console.error(message);
-                process.exit(1);
-            }
+			let message = defaultValidationMessage(errors);
+			if (this["~driver"].formatError) {
+				const customMessage = this["~driver"].formatError(errors);
+				if (customMessage) {
+					message = customMessage;
+				}
+			}
 
-            throw new Error(message);
-        }
-        return current;
-    }
+			if (allowForceExit && this["~driver"].forceExit) {
+				console.error(message);
+				process.exit(1);
+			}
 
-    public toJSON(): inPromise<D["async"], StaticSchema<S>> {
-        if (!this["~loaded"]) {
-            throw new Error(notLoadedMessage("exporting JSON"));
-        }
-        if (this["~driver"].async) {
-            return Promise.resolve(this["~cache"] as StaticSchema<S>) as any;
-        }
-        return this["~cache"] as any;
-    }
+			throw new Error(message);
+		}
+
+		this.applyRefines(current, allowForceExit);
+		return current;
+	}
+
+	/**
+	 * Runs user-supplied `refines` validators (declared via CustomOptions)
+	 * against the cleaned data. A refine returns `true` to accept, or
+	 * `false`/a string message to reject.
+	 */
+	private applyRefines(data: any, allowForceExit: boolean): void {
+		const failures: string[] = [];
+
+		const walk = (node: any, value: any, dotPath: string): void => {
+			if (!node || typeof node !== "object") return;
+
+			const isTypeBox = !!node[Symbol.for("TypeBox.Kind")];
+			if (isTypeBox) {
+				const refines = (node as any).refines as
+					| ((value: unknown) => boolean | string)[]
+					| undefined;
+				if (Array.isArray(refines) && value !== undefined) {
+					for (const refine of refines) {
+						const result = refine(value);
+						if (result !== true) {
+							const label = dotPath || "(root)";
+							failures.push(
+								`- ${label}: ${typeof result === "string" ? result : "failed refine validation"}`,
+							);
+						}
+					}
+				}
+				// Descend into nested object schemas
+				if ((node as any).type === "object" && (node as any).properties) {
+					for (const key of Object.keys((node as any).properties)) {
+						walk(
+							(node as any).properties[key],
+							value?.[key],
+							dotPath ? `${dotPath}.${key}` : key,
+						);
+					}
+				}
+			} else {
+				for (const key of Object.keys(node)) {
+					walk(node[key], value?.[key], dotPath ? `${dotPath}.${key}` : key);
+				}
+			}
+		};
+
+		walk(this["~schema"].defined, data, "");
+
+		if (failures.length > 0) {
+			const message = ["[KFG] Refine validation failed:", ...failures].join(
+				"\n",
+			);
+			if (allowForceExit && this["~driver"].forceExit) {
+				console.error(message);
+				process.exit(1);
+			}
+			throw new Error(message);
+		}
+	}
+
+	public toJSON(): inPromise<D["async"], StaticSchema<S>> {
+		if (!this["~loaded"]) {
+			throw new Error(notLoadedMessage("exporting JSON"));
+		}
+		if (this["~driver"].async) {
+			return Promise.resolve(this["~cache"] as StaticSchema<S>) as any;
+		}
+		return this["~cache"] as any;
+	}
 }

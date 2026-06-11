@@ -5,7 +5,7 @@ import type {
 	TSchema,
 } from "@sinclair/typebox";
 
-export type { TSchema, TObject, SchemaOptions };
+export type { SchemaOptions, TObject, TSchema };
 
 /**
  * A recursive type representing the user-friendly schema definition.
@@ -92,5 +92,5 @@ export interface CustomOptions<Default = any> {
  * But keeping it for potential compatibility if we re-introduce async drivers later.
  */
 export type inPromise<Async extends boolean, Result> = Async extends true
-    ? Promise<Result>
-    : Result;
+	? Promise<Result>
+	: Result;

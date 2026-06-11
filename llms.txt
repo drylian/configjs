@@ -1,0 +1,284 @@
+# kfg
+
+> Type-safe configuration system for Node.js, Bun, and Deno. Built on TypeBox
+> with Laravel-style validation rules, smart environment tracing, and a
+> safeguarded persistence layer (atomic writes, cross-process locking, backups).
+
+This file documents the library for LLMs and tools. Everything below reflects
+the public API exported from `kfg`.
+
+---
+
+## Overview
+
+kfg lets you declare a configuration schema once and get:
+
+- Full TypeScript inference for reads/writes (`get`/`set` are dot-path typed).
+- Runtime validation and coercion (TypeBox `Value`), with friendly errors.
+- Pluggable drivers — load/save from `.env`, JSON files, or your own source.
+- Smart defaults applied automatically; nested structures supported.
+- A safeguard layer: atomic temp-write+verify+rename, a lock file against
+  concurrent writers, optional backup mirror with auto-recovery, and a
+  transactional read-modify-write primitive that prevents lost updates.
+
+Runtime: works on Node.js, Bun, and Deno. The package ships CJS + ESM + d.ts.
+
+## Install
+
+```
+npm install kfg      # or: bun add kfg / yarn add kfg / pnpm add kfg
+```
+
+## Quick start
+
+```ts
+import { Kfg, c, EnvDriver } from "kfg";
+
+const config = new Kfg(new EnvDriver(), {
+  server: {
+    host: c.string({ default: "0.0.0.0" }),
+    port: c.port({ default: 3000 }),
+  },
+  database: {
+    url: c.string({ prop: "DATABASE_URL" }), // read from $DATABASE_URL
+  },
+});
+
+config.load(); // reads .env + process.env, applies defaults, validates
+
+const port = config.get("server.port");  // typed as number
+const url  = config.get("database.url"); // typed as string
+config.set("server.port", 8080);          // persists to .env
+```
+
+---
+
+## Schema definition
+
+A schema is a plain nested object whose leaves are TypeBox schemas produced by
+the `c` helper (aliases: `k`, `m`). Both PascalCase and camelCase names exist
+(`c.String` === `c.string`).
+
+### Builders (`c`)
+
+- `c.string(opts)` / `c.number(opts)` / `c.boolean(opts)`
+- `c.object(props, opts)` / `c.array(items, opts)` / `c.record(key, value, opts)`
+- `c.enum(values, opts)` — union of literals from a string[]/const array/TS enum
+- `c.optional(schema)` — marks a field optional
+- Formatted strings (validated): `c.email`, `c.url`, `c.ip`, `c.ipv6`,
+  `c.uuid`, `c.slug`, `c.date`, `c.port` (0–65535)
+- `c.random({ max })` — numeric default randomized at load time
+- `c.createms()` — numeric default = current epoch ms at load time
+- `c.any()`, `c.model(model, resolver?, opts)`
+- `c.validate(schema, data)` — one-shot validate+coerce, returns clean data
+
+### Custom metadata (`CustomOptions`)
+
+Any builder accepts these extra options:
+
+- `default` — value applied when the source omits the key.
+- `description` — documentation; used as a comment when persisting.
+- `prop` — override the environment variable / source key name.
+- `important` — keep this field required even under `load({ only_importants })`.
+- `refines` — array of `(value) => true | false | string` custom validators;
+  return `true` to accept, or `false`/a message to reject.
+
+### Laravel-style rules (`c.rule`)
+
+`c.rule("required|string|min:3", defaultValue?)` parses a pipe-delimited rule
+string into a TypeBox schema. The resulting static type is inferred from the
+literal string.
+
+Supported tokens:
+
+- Types: `string`, `number`/`numeric`, `integer`/`int`, `boolean`, `array`,
+  `accepted` (literal true), `declined` (literal false), `in:a,b,c` (enum).
+- Optionality: `optional`, `nullable`.
+- String length: `min:n`, `max:n`, `between:a,b`, `size:n`/`len:n`/`length:n`.
+- String formats: `email`, `url`/`uri`/`active_url`, `ip`, `ipv4`, `ipv6`,
+  `uuid`, `mac_address`, `json`, `hex_color`, `timezone`, `hostname`, `date`,
+  `datetime`/`date_time`, `time`.
+- String patterns: `regex:/.../`, `not_regex:/.../`, `alpha`, `alpha_num`,
+  `alpha_dash`, `ascii`, `starts_with:a,b`, `ends_with:a,b`,
+  `doesnt_start_with:a,b`, `doesnt_end_with:a,b`, `contains:a,b`, `digits:n`,
+  `digits_between:a,b`, `decimal:n` / `decimal:min,max`, `lowercase`,
+  `uppercase`, `ulid`, `slug`.
+- Numeric: `min:n`, `max:n`, `between:a,b`, `gt:n`, `gte:n`, `lt:n`, `lte:n`,
+  `multiple_of:n`, `size:n`, `digits:n`, `digits_between:a,b`.
+- Array: `min:n`, `max:n`, `between:a,b`, `size:n`, `distinct`.
+
+Cross-field/database rules (`unique`, `exists`, `confirmed`, `same`,
+`required_if`, …) are intentionally not supported — they don't map to a
+single-value config schema. Use `refines` for custom logic.
+
+---
+
+## The Kfg instance
+
+```ts
+const kfg = new Kfg(driver, schema);
+```
+
+Methods (return type is sync or `Promise` depending on the driver's `async`
+flag — the same API serves both):
+
+- `load(options?)` — load from the driver, validate, populate the cache.
+  `options.only_importants: true` makes every non-`important` field optional.
+  Driver config keys may also be passed here and are merged into the driver.
+- `reload(options?)` — re-run load (re-reads the source).
+- `get(path)` — typed read by dot path. Throws if not loaded.
+- `set(path, value, description?)` — write + persist a single path.
+- `insert(rootPath, partial)` — merge a partial object into an existing object.
+- `inject(partial)` — deep-merge a partial config and persist.
+- `del(path)` — delete a path and persist.
+- `has(...paths)` — true if all paths are present.
+- `mutate(fn)` — transactional read-modify-write (see below).
+- `conf(path)` / `schematic(path)` — read the schema node at a path.
+- `toJSON()` — the validated config object.
+- `config` — a read-only proxy: `kfg.config.server.port` (use `set` to write).
+
+All mutations validate against the schema and roll back the in-memory cache on
+failure (the persisted file is never left invalid).
+
+---
+
+## Drivers
+
+### EnvDriver
+
+```ts
+new EnvDriver({
+  path?: string,              // .env path (default: ".env", cwd-relative)
+  forceExit?: boolean,        // default true: exit(1) on invalid load instead of throwing
+  debug?: boolean,            // print a source trace per key on load
+  allow_backup?: boolean | string,
+  lock_timeout?: number,
+  mutate_set?: boolean,
+});
+```
+
+- Maps nested paths to UPPER_SNAKE env keys (or the field's `prop`).
+- Merges `.env` file + `process.env` + schema defaults; records the source of
+  each value (`file` / `process` / `default` / `injected`), printable with
+  `debug: true`.
+- Coerces strings: numbers via `Number`, booleans accept
+  `true/1/yes/on/y` and `false/0/no/off/n`; unknown tokens fail validation
+  rather than silently becoming `false`.
+
+### JsonDriver
+
+```ts
+new JsonDriver({
+  path?: string,              // default "config.json"
+  keyroot?: boolean,          // store as flat dotted keys instead of nested
+  allow_backup?: boolean | string,
+  lock_timeout?: number,
+  mutate_set?: boolean,
+});
+```
+
+- Persists pretty JSON; preserves per-key descriptions as `:comment` siblings.
+- On load, recovers from the backup if the main file is corrupted.
+
+---
+
+## Safeguarded persistence
+
+All writes (both drivers) go through `src/utils/safe-write.ts`:
+
+- **Atomic write**: content is written to `<file>.tmp`, read back and verified
+  (and JSON-parsed for JsonDriver) before an atomic `rename` over the target. A
+  failed/partial write never corrupts the existing file. A full disk raises a
+  clear `Device out of space` error and leaves the original intact.
+- **Locking**: a `<file>.lock` prevents concurrent writers. A writer waits up to
+  `lock_timeout` ms (default 1000) for the lock, effectively queueing across
+  processes. A lock owned by a dead PID is stolen immediately (handles crash +
+  restart); otherwise a time-based staleness window (10s) is the backstop.
+- **Backups** (`allow_backup`, default `true`): after each successful write the
+  file is mirrored to `<file>.bak` (or a custom path if a string is given;
+  `false` disables). `JsonDriver.load` auto-restores from this mirror when the
+  main file is unreadable.
+
+### Lost updates and transactions
+
+A plain `set`/`save` gives *write atomicity* but not *update isolation*: two
+processes that `load → modify → set` concurrently can clobber each other,
+because each modifies its own stale snapshot.
+
+Two ways to make read-modify-write safe across processes:
+
+1. `kfg.mutate(fn)` — holds the lock across the entire read→modify→write. `fn`
+   receives the freshest persisted draft; mutate it in place or return a
+   replacement:
+
+   ```ts
+   kfg.mutate(draft => { draft.counters[id] = (draft.counters[id] ?? 0) + 1; });
+   ```
+
+2. Driver flag `mutate_set: true` — routes `set`/`insert`/`inject`/`del`
+   through the transactional path automatically, so a stale-cache write no
+   longer overwrites another writer's keys. Note: `set(path, absoluteValue)`
+   stays last-write-wins for *that* key (the value is computed in your code,
+   before the transaction); `mutate_set` only protects *other* keys from being
+   clobbered. For true atomic increments, use `mutate(fn)`.
+
+   Caveat for EnvDriver: a transactional write rewrites all resolved keys back
+   to the `.env`, including values that originated from `process.env`.
+
+---
+
+## Writing a custom driver
+
+Extend `KfgDriver<Config, Async>` and implement `load`/`save`. The generic
+`Async` flag flips the whole Kfg API between sync and Promise-returning.
+
+```ts
+import { KfgDriver } from "kfg";
+import type { SchemaDefinition } from "kfg";
+
+class MemoryDriver extends KfgDriver<{ seed?: Record<string, any> }, false> {
+  private store: Record<string, any>;
+
+  constructor(config: { seed?: Record<string, any> } = {}) {
+    super({ name: "memory-driver", config, async: false });
+    this.store = config.seed ?? {};
+  }
+
+  // Required: return the raw config object for the given schema.
+  // `buildDefault(schema)` and `merge(a, b)` are provided helpers.
+  load(schema: SchemaDefinition): Record<string, any> {
+    return this.merge(this.buildDefault(schema), this.store);
+  }
+
+  // Required: persist the full config object.
+  save(data: Record<string, any>): void {
+    this.store = structuredClone(data);
+  }
+}
+```
+
+Optional hooks:
+
+- `update(key, value, description?)` — atomic single-key write. When present,
+  `Kfg.set` calls it instead of `save`.
+- `delete(key)` — atomic single-key delete. When present, `Kfg.del` calls it.
+- `formatError(errors)` — return a custom string for validation errors, or
+  `undefined` for the default message.
+- `transaction(schema, fn)` — locked read-modify-write. When present, it powers
+  `Kfg.mutate` and the `mutate_set` flag. `fn` receives the freshly-read raw
+  config and returns the raw config to persist.
+
+For an **async** driver, set `async: true` in the constructor options and type
+the class as `KfgDriver<Config, true>`; every method returns a `Promise`, and
+`Kfg`'s methods will too.
+
+Reusable utilities for file-backed drivers (from `kfg`): `safeWriteFileSync`,
+`safeMutateFileSync`, `safeReadFileSync`, `withFileLock`, `backupPathFor`.
+
+---
+
+## Links
+
+- Repository: https://github.com/drysius/kfg
+- Homepage / docs: https://kfg.js.org
+- License: MIT

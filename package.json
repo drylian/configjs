@@ -2,10 +2,12 @@
   "name": "kfg",
   "type": "module",
   "description": "Powerful, type-safe configuration system for Node.js, Bun, and Deno. Built on TypeBox with Laravel-style rules and smart environment tracing.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "ai_instructions": "https://kfg.js.org/llms.txt",
+  "llms": "https://kfg.js.org/llms.txt",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/drysius/kfg.git"
@@ -42,9 +44,9 @@
   "scripts": {
     "build": "tsc --project tsconfig.test.json && bun run build.ts",
     "docs": "typedoc",
+    "postdocs": "node scripts/copy-llms.mjs",
     "test": "bun test",
     "check": "biome check --write",
-    "llms": "bun llms.ts",
     "typecheck": "tsc --noEmit",
     "prebuild": "tsc --project tsconfig.test.json"
   },

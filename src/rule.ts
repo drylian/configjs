@@ -1,8 +1,11 @@
 // rule.ts
 import {
+	type ArrayOptions,
 	type NumberOptions,
 	type SchemaOptions,
 	type StringOptions,
+	type TAny,
+	type TArray,
 	type TBoolean,
 	type TInteger,
 	type TLiteral,
@@ -13,6 +16,8 @@ import {
 	type TUnion,
 	Type,
 } from "@sinclair/typebox";
+// Side effect: registers string formats used below (email, uri, ip, mac, ...)
+import "./utils/formats";
 
 /* -------------------------------------------------------------------------------------------------
  * Type-level parser (inferência por string literal)
@@ -60,22 +65,26 @@ type IsOptional<TRules extends string> =
 type BaseSchema<TRules extends string> =
 	IsEnum<TRules> extends true
 		? TUnion<TLiteral<SplitComma<InValues<TRules>>>[]>
-		: HasToken<TRules, "boolean"> extends true
-			? TBoolean
-			: HasToken<TRules, "integer"> extends true
-				? TInteger
-				: HasToken<TRules, "int"> extends true
-					? TInteger
-					: HasToken<TRules, "number"> extends true
-						? TNumber
-						: HasToken<TRules, "numeric"> extends true
-							? TNumber
-							: TString;
+		: HasToken<TRules, "accepted"> extends true
+			? TLiteral<true>
+			: HasToken<TRules, "declined"> extends true
+				? TLiteral<false>
+				: HasToken<TRules, "boolean"> extends true
+					? TBoolean
+					: HasToken<TRules, "array"> extends true
+						? TArray<TAny>
+						: HasToken<TRules, "integer"> extends true
+							? TInteger
+							: HasToken<TRules, "int"> extends true
+								? TInteger
+								: HasToken<TRules, "number"> extends true
+									? TNumber
+									: HasToken<TRules, "numeric"> extends true
+										? TNumber
+										: TString;
 
-type WithOptional<
-	TRules extends string,
-	S extends TSchema,
-> = IsOptional<TRules> extends true ? TOptional<S> : S;
+type WithOptional<TRules extends string, S extends TSchema> =
+	IsOptional<TRules> extends true ? TOptional<S> : S;
 
 /** Schema inferido (quando TRules é literal). */
 export type RuleSchema<TRules extends string> = WithOptional<
@@ -92,17 +101,23 @@ export type RuleSchemaFor<TRules extends string> = string extends TRules
 export type RuleValue<TRules extends string> =
 	IsEnum<TRules> extends true
 		? SplitComma<InValues<TRules>>
-		: HasToken<TRules, "boolean"> extends true
-			? boolean
-			: HasToken<TRules, "integer"> extends true
-				? number
-				: HasToken<TRules, "int"> extends true
-					? number
-					: HasToken<TRules, "number"> extends true
-						? number
-						: HasToken<TRules, "numeric"> extends true
+		: HasToken<TRules, "accepted"> extends true
+			? true
+			: HasToken<TRules, "declined"> extends true
+				? false
+				: HasToken<TRules, "boolean"> extends true
+					? boolean
+					: HasToken<TRules, "array"> extends true
+						? any[]
+						: HasToken<TRules, "integer"> extends true
 							? number
-							: string;
+							: HasToken<TRules, "int"> extends true
+								? number
+								: HasToken<TRules, "number"> extends true
+									? number
+									: HasToken<TRules, "numeric"> extends true
+										? number
+										: string;
 
 export type RuleDefault<TRules extends string> = string extends TRules
 	? unknown
@@ -213,7 +228,11 @@ function buildStringDeclaration(
 				break;
 			case "url":
 			case "uri":
+			case "active_url":
 				options.format = "uri";
+				break;
+			case "ip":
+				options.format = "ip";
 				break;
 			case "ipv4":
 				options.format = "ipv4";
@@ -224,6 +243,21 @@ function buildStringDeclaration(
 			case "uuid":
 				options.format = "uuid";
 				break;
+			case "mac_address":
+				options.format = "mac";
+				break;
+			case "json":
+				options.format = "json";
+				break;
+			case "hex_color":
+				options.format = "hex-color";
+				break;
+			case "timezone":
+				options.format = "timezone";
+				break;
+			case "hostname":
+				options.format = "hostname";
+				break;
 
 			// formatos extras "laravel-like"
 			case "date":
@@ -233,11 +267,19 @@ function buildStringDeclaration(
 			case "datetime":
 				options.format = "date-time";
 				break;
+			case "time":
+				options.format = "time";
+				break;
 
 			// regex
 			case "regex": {
 				const rx = parseRegexRule(raw);
 				if (rx) patterns.push(rx);
+				break;
+			}
+			case "not_regex": {
+				const rx = parseRegexRule(raw);
+				if (rx) patterns.push(`^(?![\\s\\S]*(?:${rx}))[\\s\\S]*$`);
 				break;
 			}
 
@@ -275,6 +317,37 @@ function buildStringDeclaration(
 				if (list.length) patterns.push(`(?:${list.join("|")})$`);
 				break;
 			}
+			case "doesnt_start_with": {
+				const list = (raw ?? "")
+					.split(",")
+					.map((x) => x.trim())
+					.filter(Boolean)
+					.map(escapeRegexLiteral);
+				if (list.length) patterns.push(`^(?!(?:${list.join("|")}))`);
+				break;
+			}
+			case "doesnt_end_with": {
+				const list = (raw ?? "")
+					.split(",")
+					.map((x) => x.trim())
+					.filter(Boolean)
+					.map(escapeRegexLiteral);
+				if (list.length)
+					patterns.push(`^(?![\\s\\S]*(?:${list.join("|")})$)[\\s\\S]*$`);
+				break;
+			}
+			case "contains": {
+				const list = (raw ?? "")
+					.split(",")
+					.map((x) => x.trim())
+					.filter(Boolean)
+					.map(escapeRegexLiteral);
+				// every listed substring must be present
+				for (const item of list) {
+					patterns.push(`[\\s\\S]*${item}[\\s\\S]*`);
+				}
+				break;
+			}
 
 			// dígitos
 			case "digits":
@@ -284,6 +357,15 @@ function buildStringDeclaration(
 				const [a, b] = (raw ?? "").split(",").map((x) => Number(x));
 				if (Number.isFinite(a) && Number.isFinite(b)) {
 					patterns.push(`^\\d{${a},${b}}$`);
+				}
+				break;
+			}
+			case "decimal": {
+				// decimal:places or decimal:min,max — digits after the decimal point
+				const [a, b] = (raw ?? "").split(",").map((x) => Number(x));
+				if (Number.isFinite(a)) {
+					const quant = Number.isFinite(b) ? `{${a},${b}}` : `{${a}}`;
+					patterns.push(`^-?\\d+\\.\\d${quant}$`);
 				}
 				break;
 			}
@@ -356,6 +438,28 @@ function applyNumericConstraints(parts: string[], options: NumberOptions) {
 			case "multiple_of":
 				if (Number.isFinite(n!) && n! !== 0) options.multipleOf = n!;
 				break;
+			case "size":
+				// numeric size:n — value must equal n
+				if (Number.isFinite(n!)) {
+					options.minimum = n!;
+					options.maximum = n!;
+				}
+				break;
+			case "digits":
+				// integer with exactly n digits
+				if (Number.isFinite(n!) && n! > 0) {
+					options.minimum = n! === 1 ? 0 : 10 ** (n! - 1);
+					options.maximum = 10 ** n! - 1;
+				}
+				break;
+			case "digits_between": {
+				const [a, b] = (raw ?? "").split(",").map((x) => Number(x));
+				if (Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a) {
+					options.minimum = a === 1 ? 0 : 10 ** (a - 1);
+					options.maximum = 10 ** b - 1;
+				}
+				break;
+			}
 
 			// presence/type rules que não mudam constraints
 			case "number":
@@ -391,6 +495,45 @@ function buildIntegerDeclaration(
 
 	applyNumericConstraints(parts, options);
 	return Type.Integer(options);
+}
+
+function buildArrayDeclaration(
+	parts: string[],
+	defaultValue?: any[],
+): TArray<TAny> {
+	const options: ArrayOptions & { default?: any[] } = {};
+	if (defaultValue !== undefined) options.default = defaultValue;
+
+	for (const p of parts) {
+		const [key, raw] = p.split(":", 2);
+		const n = raw !== undefined ? Number(raw) : undefined;
+
+		switch (key) {
+			case "min":
+				if (Number.isFinite(n!)) options.minItems = n!;
+				break;
+			case "max":
+				if (Number.isFinite(n!)) options.maxItems = n!;
+				break;
+			case "between": {
+				const [a, b] = (raw ?? "").split(",").map((x) => Number(x));
+				if (Number.isFinite(a)) options.minItems = a;
+				if (Number.isFinite(b)) options.maxItems = b;
+				break;
+			}
+			case "size":
+				if (Number.isFinite(n!)) {
+					options.minItems = n!;
+					options.maxItems = n!;
+				}
+				break;
+			case "distinct":
+				options.uniqueItems = true;
+				break;
+		}
+	}
+
+	return Type.Array(Type.Any(), options);
 }
 
 function buildBooleanDeclaration(defaultValue?: boolean): TBoolean {
@@ -443,8 +586,20 @@ export function rule(rules: string, defaultValue?: unknown): TSchema {
 			.map((v) => v.trim())
 			.filter(Boolean);
 		schema = buildEnumDeclaration(values, defaultValue as string | undefined);
+	} else if (parts.includes("accepted")) {
+		schema = Type.Literal(
+			true,
+			defaultValue !== undefined ? { default: defaultValue } : {},
+		);
+	} else if (parts.includes("declined")) {
+		schema = Type.Literal(
+			false,
+			defaultValue !== undefined ? { default: defaultValue } : {},
+		);
 	} else if (parts.includes("boolean")) {
 		schema = buildBooleanDeclaration(defaultValue as boolean | undefined);
+	} else if (parts.includes("array")) {
+		schema = buildArrayDeclaration(parts, defaultValue as any[] | undefined);
 	} else if (parts.includes("integer") || parts.includes("int")) {
 		schema = buildIntegerDeclaration(parts, defaultValue as number | undefined);
 	} else if (parts.includes("number") || parts.includes("numeric")) {

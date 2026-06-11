@@ -5,6 +5,10 @@
  * @param content The string content of the .env file.
  * @returns A record of key-value pairs.
  */
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function parse(content: string): Record<string, string> {
 	const result: Record<string, string> = {};
 	const lines = content.split(/\r?\n/);
@@ -21,19 +25,28 @@ export function parse(content: string): Record<string, string> {
 		const [, key, rawValue] = match;
 		let value = rawValue.trim();
 
-		// Strip end-of-line comments, unless in quotes
+		// Strip end-of-line comments, unless in quotes.
+		// A '#' only starts a comment when preceded by whitespace (dotenv behavior),
+		// so values like "a#b" are kept intact.
 		if (!value.startsWith('"') && !value.startsWith("'")) {
-			const commentIndex = value.indexOf("#");
-			if (commentIndex > -1) {
-				value = value.substring(0, commentIndex).trim();
+			const commentMatch = value.match(/\s#/);
+			if (commentMatch && commentMatch.index !== undefined) {
+				value = value.substring(0, commentMatch.index).trim();
 			}
 		}
 
 		// Unquote values
-		if (value.startsWith("'") && value.endsWith("'")) {
+		if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
 			value = value.substring(1, value.length - 1);
-		} else if (value.startsWith('"') && value.endsWith('"')) {
-			value = value.substring(1, value.length - 1);
+		} else if (
+			value.length >= 2 &&
+			value.startsWith('"') &&
+			value.endsWith('"')
+		) {
+			value = value
+				.substring(1, value.length - 1)
+				.replace(/\\n/g, "\n")
+				.replace(/\\"/g, '"');
 		}
 
 		result[key] = value;
@@ -61,18 +74,19 @@ export function updateEnvContent(
 	const newLines = [...lines];
 
 	let formattedValue: string;
-	if (Array.isArray(value)) {
+	if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
 		formattedValue = JSON.stringify(value);
 	} else {
 		const stringValue = String(value);
 		formattedValue = /[\s"'#]/.test(stringValue)
-			? `"${stringValue.replace(/"/g, '"').replace(/\n/g, "\\n")}"`
+			? `"${stringValue.replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`
 			: stringValue;
 	}
 
+	const keyRegex = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*`);
 	let lineIndex = -1;
 	for (let i = 0; i < lines.length; i++) {
-		if (new RegExp(`^\\s*${key}\\s*=\\s*`).test(lines[i])) {
+		if (keyRegex.test(lines[i])) {
 			keyFound = true;
 			lineIndex = i;
 			break;
@@ -86,10 +100,11 @@ export function updateEnvContent(
 		// Check for description and add if it's not there.
 		if (description) {
 			const comment = `# ${description}`;
-			const hasExactCommentAbove = lineIndex > 0 && newLines[lineIndex - 1].trim() === comment;
-			
+			const hasExactCommentAbove =
+				lineIndex > 0 && newLines[lineIndex - 1].trim() === comment;
+
 			if (!hasExactCommentAbove) {
-                newLines.splice(lineIndex, 0, comment);
+				newLines.splice(lineIndex, 0, comment);
 			}
 		}
 	} else {
@@ -114,14 +129,14 @@ export function updateEnvContent(
  */
 export function removeEnvKey(content: string, key: string): string {
 	const lines = content.split(/\r?\n/);
-	const keyRegex = new RegExp(`^\\s*${key}\\s*=\\s*`);
+	const keyRegex = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*`);
 	const newLines: string[] = [];
 
 	for (const line of lines) {
 		if (keyRegex.test(line)) {
 			// key found, don't add it.
-			// if last line in newLines is a comment, remove it.
-			if (
+			// Remove the contiguous comment block directly above (its description).
+			while (
 				newLines.length > 0 &&
 				newLines[newLines.length - 1].trim().startsWith("#")
 			) {

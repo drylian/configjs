@@ -14,7 +14,6 @@ test.ts
 # code coverage
 coverage
 *.lcov
-llms.txt
 test_multimode.db
 resources
 # logs
@@ -24,11 +23,13 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 data
 
 # dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+*.env
+*.bak
+.tmp*
+
+# kfg safeguard artifacts (lock + atomic temp write files)
+*.lock
+*.tmp
 
 # caches
 .eslintcache

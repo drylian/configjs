@@ -27,7 +27,9 @@ export function setProperty<T extends Record<string, any>>(
 	let target: any = obj;
 	for (const key of keys) {
 		if (key === "__proto__" || key === "constructor" || key === "prototype") {
-			continue;
+			// Abort entirely: skipping the segment would silently write the
+			// remaining path onto the wrong object.
+			return;
 		}
 		if (target[key] === undefined || target[key] === null) {
 			target[key] = {};
@@ -36,7 +38,11 @@ export function setProperty<T extends Record<string, any>>(
 		}
 		target = target[key];
 	}
-	if (lastKey !== "__proto__" && lastKey !== "constructor" && lastKey !== "prototype") {
+	if (
+		lastKey !== "__proto__" &&
+		lastKey !== "constructor" &&
+		lastKey !== "prototype"
+	) {
 		target[lastKey] = value;
 	}
 }
@@ -94,7 +100,7 @@ export function flattenObject(
 	return Object.keys(obj).reduce(
 		(acc, k) => {
 			const pre = prefix.length ? `${prefix}.` : "";
-			if (isObject(obj[k])) {
+			if (isObject(obj[k]) && Object.keys(obj[k]).length > 0) {
 				Object.assign(acc, flattenObject(obj[k], pre + k));
 			} else {
 				acc[pre + k] = obj[k];

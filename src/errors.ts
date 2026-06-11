@@ -25,9 +25,7 @@ export function defaultValidationMessage(issues: ValidationIssue[]): string {
 		const path = normalizePath(issue.path);
 		const expected = issue.schema?.type ? ` expected ${issue.schema.type}` : "";
 		const received =
-			issue.value !== undefined
-				? `, received ${typeOfValue(issue.value)}`
-				: "";
+			issue.value !== undefined ? `, received ${typeOfValue(issue.value)}` : "";
 		const detail = issue.message ? ` (${issue.message})` : "";
 		return `- ${path}:${expected}${received}${detail}`;
 	});

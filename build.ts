@@ -7,6 +7,15 @@ import { rm } from 'fs/promises'
 // Limpa o diretório de distribuição anterior
 await rm('dist', { recursive: true, force: true })
 
+// Banner emitted at the top of every compiled bundle. Points AI tools/agents
+// to the machine-readable usage guide.
+const AI_BANNER =
+  '/**\n' +
+  ' * kfg - type-safe configuration system.\n' +
+  ' * AI/LLM instructions and full usage guide: https://kfg.js.org/llms.txt\n' +
+  ' * (covers schema rules, drivers, the safeguard layer, and writing custom drivers)\n' +
+  ' */'
+
 const config: Options = {
   platform: 'node',
   entry: ['src/index.ts'],
@@ -18,6 +27,7 @@ const config: Options = {
   outDir: 'dist',
   splitting: false,
   shims: true,
+  banner: { js: AI_BANNER },
   tsconfig: './tsconfig.json'
 }
 
@@ -34,4 +44,4 @@ const dtsCode = generateDtsBundle([{
   }
 }])
 
-await writeFile(dtsPath, dtsCode[0], { encoding: 'utf-8' })
+await writeFile(dtsPath, `${AI_BANNER}\n${dtsCode[0]}`, { encoding: 'utf-8' })

@@ -9,19 +9,14 @@ import {
 	type TSchema,
 	type TUnion,
 	Type,
-    FormatRegistry,
 } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
+import { defaultValidationMessage } from "./errors";
 import { rule } from "./rule";
 import type { CustomOptions, SchemaDefinition } from "./types";
+// Side effect: registers all string formats (email, uuid, uri, ip, ...)
+import "./utils/formats";
 import { addSmartDefaults, buildTypeBoxSchema } from "./utils/schema";
-import { defaultValidationMessage } from "./errors";
-
-// Register basic formats
-FormatRegistry.Set("date-time", (value) => !Number.isNaN(Date.parse(value)));
-FormatRegistry.Set("email", (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
-FormatRegistry.Set("ipv4", (value) => /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(value));
-FormatRegistry.Set("uuid", (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 
 // Helper function to extract values from string arrays, const arrays, or enums
 function getEnumValues<T extends readonly (string | number)[] | object>(
@@ -138,15 +133,16 @@ const _c = {
 	/** Creates a string schema with slug pattern. */
 	Slug: <TDefault extends string>(
 		options?: StringOptions & CustomOptions<TDefault>,
-	) => Type.String({ 
-        pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", 
-        ...options 
-    }),
+	) =>
+		Type.String({
+			pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+			...options,
+		}),
 
-    /** Creates a string schema with 'date-time' format. */
-    Date: <TDefault extends string>(
-        options?: StringOptions & CustomOptions<TDefault>
-    ) => Type.String({ ...options, format: "date-time" }),
+	/** Creates a string schema with 'date-time' format. */
+	Date: <TDefault extends string>(
+		options?: StringOptions & CustomOptions<TDefault>,
+	) => Type.String({ ...options, format: "date-time" }),
 
 	/** Creates an Any schema. */
 	Any: () => Type.Any(),
@@ -230,10 +226,10 @@ export const c = {
 	ipv6: _c.IPv6,
 	email: _c.Email,
 	url: _c.URL,
-    port: _c.Port,
-    uuid: _c.UUID,
-    slug: _c.Slug,
-    date: _c.Date,
+	port: _c.Port,
+	uuid: _c.UUID,
+	slug: _c.Slug,
+	date: _c.Date,
 	any: _c.Any,
 	optional: _c.Optional,
 	random: _c.Random,

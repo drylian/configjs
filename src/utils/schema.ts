@@ -23,6 +23,14 @@ export function addSmartDefaults(schemaNode: TObject): void {
 			continue;
 		}
 
+		if ((prop as any)[Symbol.for("isRandom")] && prop.default === undefined) {
+			const max = (prop as any).max ?? 100;
+			(prop as any).default = Math.floor(Math.random() * (max + 1));
+		}
+		if ((prop as any).createms) {
+			(prop as any).default = Date.now();
+		}
+
 		// Only recurse if the property is a valid TypeBox object schema
 		if (prop.type === "object" && prop[Symbol.for("TypeBox.Kind") as any]) {
 			addSmartDefaults(prop as TObject);
@@ -117,7 +125,9 @@ export function makeSchemaOptional(
 		if (schemaAny.type === "object" && schemaAny.properties) {
 			const nextProperties: Record<string, TSchema> = {};
 			for (const propKey of Object.keys(schemaAny.properties)) {
-				nextProperties[propKey] = makeTypeBoxOptional(schemaAny.properties[propKey]);
+				nextProperties[propKey] = makeTypeBoxOptional(
+					schemaAny.properties[propKey],
+				);
 			}
 
 			const clone: any = { ...schemaAny, properties: nextProperties };

@@ -23,12 +23,12 @@ jobs:
       - name: Installing dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Caeljs
+      - name: Build package
         run: bun run build
 
-      - name: Remove unnecessary files 
-        run: rm -rf node_modules tests build.ts docs example.ts bun.lock .tsup tsconfig.cjs.json tsconfig.test.json tsconfig.dts.json tsconfig.json tsconfig.mjs.json bun.lockb docs src package-lock.json .github .git .gitignore .gitattributes
-      
+      # No manual cleanup needed: `files: ["dist"]` in package.json already
+      # limits the published tarball to the build output.
+
       - name: Setup Node for Publishing
         uses: actions/setup-node@v4
         with:

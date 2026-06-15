@@ -215,7 +215,9 @@ export class EnvDriver extends KfgDriver<
 					? JSON.stringify(err.schema.default)
 					: `<${expectedType}>`;
 
-			if (isMissing) {
+			if (err.schema?.custom_error) {
+				invalid.push(`in ${fileLabel} fix:\n${err.schema.custom_error}`);
+			} else if (isMissing) {
 				missing.push(colors.green(`+ ${envKey}=${expected}`));
 			} else {
 				const received =

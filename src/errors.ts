@@ -1,7 +1,7 @@
 type ValidationIssue = {
 	path?: string;
 	message?: string;
-	schema?: { type?: string } & Record<string, unknown>;
+	schema?: { type?: string; custom_error?: string } & Record<string, unknown>;
 	value?: unknown;
 };
 
@@ -23,6 +23,9 @@ export function notLoadedMessage(operation: string): string {
 export function defaultValidationMessage(issues: ValidationIssue[]): string {
 	const lines = issues.map((issue) => {
 		const path = normalizePath(issue.path);
+		if (issue.schema?.custom_error) {
+			return `- ${path}: ${issue.schema.custom_error}`;
+		}
 		const expected = issue.schema?.type ? ` expected ${issue.schema.type}` : "";
 		const received =
 			issue.value !== undefined ? `, received ${typeOfValue(issue.value)}` : "";

@@ -205,7 +205,9 @@ export class JsonDriver extends KfgDriver<
 				continue;
 			}
 
-			if (isMissing) {
+			if (err.schema?.custom_error) {
+				invalid.push(`in ${fileLabel} fix:\n${err.schema.custom_error}`);
+			} else if (isMissing) {
 				const example = this.jsonMissingExample(err.schema, key);
 				missing.push(`in ${fileLabel} add:\n${example}`);
 			} else {

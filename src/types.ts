@@ -84,6 +84,12 @@ export interface CustomOptions<Default = any> {
 	prop?: string;
 	refines?: ((value: unknown) => boolean | string)[];
 	createms?: boolean;
+	/**
+	 * Custom validation error message for this field. When set and the field
+	 * fails validation, the error shows this message instead of the default
+	 * "expected X, received Y" detail.
+	 */
+	custom_error?: string;
 }
 
 /**

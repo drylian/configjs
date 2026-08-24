@@ -83,4 +83,6 @@ export interface KfgApi<
 	conf<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P>;
 	schematic<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P>;
 	toJSON(): inPromise<D["async"], StaticSchema<S>>;
+	/** Drops the in-memory cache; persisted state is untouched. */
+	unload(): void;
 }

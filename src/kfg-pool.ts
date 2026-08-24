@@ -45,6 +45,14 @@ export interface KfgPoolOptions<D extends SyncDriver> {
 	 * by default. Only set it if a broken scope really should exit the process.
 	 */
 	forceExit?: boolean;
+	/**
+	 * Maximum number of instances kept in memory. Beyond it, the
+	 * least-recently-used ones are evicted. Each instance holds a full config
+	 * cache, so an unbounded pool grows with the number of scopes ever touched.
+	 */
+	max?: number;
+	/** Milliseconds of idleness after which an instance is evicted. */
+	ttl?: number;
 }
 
 /**
@@ -68,6 +76,8 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	private readonly "~instances" = new Map<string, Kfg<D, S>>();
 	/** Ambient scope for run(), following the async call tree. */
 	private readonly "~storage" = new AsyncLocalStorage<string>();
+	/** Last access per instance, kept in least-recently-used order. */
+	private readonly "~lastUsed" = new Map<string, number>();
 
 	/** How many operations have fallen back to `defaultScope`. */
 	public missingScopeCount = 0;
@@ -80,10 +90,19 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 
 	// --- Scope management ---
 
-	/** Returns (creating and loading if needed) the instance for `id`. */
+	/** Returns (creating it if needed) the instance for `id`. */
 	public for(id: string): Kfg<D, S> {
+		this.evictExpired();
+
 		const existing = this["~instances"].get(id);
-		if (existing) return existing;
+		if (existing) {
+			// Re-insert to move it to the most-recently-used end of the map.
+			this["~instances"].delete(id);
+			this["~instances"].set(id, existing);
+			this["~lastUsed"].delete(id);
+			this["~lastUsed"].set(id, Date.now());
+			return existing;
+		}
 
 		const instance = new Kfg<D, S>(
 			this["~options"].driver(id),
@@ -98,7 +117,35 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 			},
 		);
 		this["~instances"].set(id, instance);
+		this["~lastUsed"].set(id, Date.now());
+		this.evictOverflow();
 		return instance;
+	}
+
+	/** Evicts instances idle for longer than `ttl`, oldest first. */
+	private evictExpired(): void {
+		const ttl = this["~options"].ttl;
+		if (ttl === undefined) return;
+
+		const deadline = Date.now() - ttl;
+		for (const [id, used] of this["~lastUsed"]) {
+			// The map is kept in least-recently-used order, so the first live
+			// entry ends the sweep.
+			if (used > deadline) break;
+			this.dispose(id);
+		}
+	}
+
+	/** Evicts the least-recently-used instances down to `max`. */
+	private evictOverflow(): void {
+		const max = this["~options"].max;
+		if (max === undefined) return;
+
+		while (this["~instances"].size > max) {
+			const oldest = this["~instances"].keys().next();
+			if (oldest.done) break;
+			this.dispose(oldest.value);
+		}
 	}
 
 	/**
@@ -134,9 +181,44 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		return [...this["~instances"].keys()];
 	}
 
-	/** Drops the instance for `id`, releasing its cache. */
+	/** Number of instances currently held by the pool. */
+	public get size(): number {
+		return this["~instances"].size;
+	}
+
+	/**
+	 * Drops the instance for `id` from the pool, releasing its cache. Persisted
+	 * state is untouched; the next access builds a fresh instance.
+	 */
 	public dispose(id: string): boolean {
+		this["~lastUsed"].delete(id);
 		return this["~instances"].delete(id);
+	}
+
+	/**
+	 * Marks the instance for `id` as stale so the next access rereads it from
+	 * disk, keeping the instance's identity — unlike `dispose`, references
+	 * previously handed out by `for(id)` also see the fresh state. Call it after
+	 * writing a scope's file behind the pool's back.
+	 */
+	public invalidate(id: string): void {
+		this["~instances"].get(id)?.unload();
+	}
+
+	/** Invalidates every instance the pool holds. */
+	public invalidateAll(): void {
+		for (const instance of this["~instances"].values()) instance.unload();
+	}
+
+	/** Runs `fn` for every instance the pool currently holds. */
+	public each(fn: (instance: Kfg<D, S>, id: string) => void): void {
+		for (const [id, instance] of [...this["~instances"]]) fn(instance, id);
+	}
+
+	/** Drops every instance, emptying the pool. */
+	public clear(): void {
+		this["~instances"].clear();
+		this["~lastUsed"].clear();
 	}
 
 	/**
@@ -289,5 +371,9 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 
 	public toJSON(): inPromise<D["async"], StaticSchema<S>> {
 		return this.active("exporting JSON").toJSON();
+	}
+
+	public unload(): void {
+		this.active("unloading").unload();
 	}
 }

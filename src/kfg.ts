@@ -149,6 +149,16 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	/**
+	 * Drops the in-memory cache and marks the instance as not loaded, releasing
+	 * the memory it held. Persisted state is untouched: a lazy instance reloads
+	 * on the next access, and any other needs an explicit `load()`.
+	 */
+	public unload(): void {
+		this["~cache"] = {};
+		this["~loaded"] = false;
+	}
+
+	/**
 	 * Guards every operation that needs loaded data. With `lazy`, the first
 	 * access loads instead of throwing — transparent because it only applies to
 	 * synchronous drivers.

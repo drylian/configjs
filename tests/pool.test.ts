@@ -280,3 +280,69 @@ describe("ambient scope", () => {
 		expect(pool.missingScopeCount).toBe(1);
 	});
 });
+
+describe("memory ceiling", () => {
+	test("unload() releases the cache and reloads on next access", () => {
+		const pool = makePool();
+		const instance = pool.for("111");
+		instance.set("limit", 4);
+
+		instance.unload();
+		expect(instance["~loaded"]).toBe(false);
+		expect(instance["~cache"]).toEqual({});
+		expect(instance.get("limit")).toBe(4);
+	});
+
+	test("invalidate() keeps the instance identity", () => {
+		const pool = makePool();
+		const instance = pool.for("111");
+		instance.set("limit", 4);
+
+		writeFileSync(join(root, "111", "config.json"), '{"limit":77}');
+		expect(instance.get("limit")).toBe(4);
+
+		pool.invalidate("111");
+		expect(pool.for("111")).toBe(instance);
+		expect(instance.get("limit")).toBe(77);
+	});
+
+	test("max evicts the least-recently-used instance", () => {
+		const pool = makePool({ max: 2 });
+
+		pool.for("a");
+		pool.for("b");
+		pool.for("a"); // "a" becomes the most recently used
+		pool.for("c");
+
+		expect(pool.ids()).toEqual(["a", "c"]);
+		expect(pool.size).toBe(2);
+	});
+
+	test("ttl evicts idle instances", async () => {
+		const pool = makePool({ ttl: 20 });
+
+		pool.for("a");
+		await Bun.sleep(40);
+		pool.for("b");
+
+		expect(pool.ids()).toEqual(["b"]);
+	});
+
+	test("each() iterates the held instances", () => {
+		const pool = makePool();
+		pool.for("a").set("limit", 1);
+		pool.for("b").set("limit", 2);
+
+		const seen: string[] = [];
+		pool.each((instance, id) => seen.push(`${id}:${instance.get("limit")}`));
+
+		expect(seen).toEqual(["a:1", "b:2"]);
+	});
+
+	test("clear() empties the pool", () => {
+		const pool = makePool();
+		pool.for("a");
+		pool.clear();
+		expect(pool.ids()).toEqual([]);
+	});
+});

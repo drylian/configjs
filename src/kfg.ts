@@ -18,11 +18,7 @@ import {
 	getProperty,
 	setProperty,
 } from "./utils/object";
-import {
-	addSmartDefaults,
-	buildTypeBoxSchema,
-	makeSchemaOptional,
-} from "./utils/schema";
+import { compileSchema, optionalSchema } from "./utils/schema";
 
 export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	implements KfgApi<D, S>
@@ -62,8 +58,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	constructor(driver: D, schema: S) {
 		this["~driver"] = driver;
 
-		const compiled = buildTypeBoxSchema(schema);
-		addSmartDefaults(compiled);
+		const compiled = compileSchema(schema);
 
 		this["~schema"] = {
 			defined: schema,
@@ -112,11 +107,9 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		}
 
 		const schemaToLoad = options?.only_importants
-			? (makeSchemaOptional(this["~schema"].defined) as S)
+			? (optionalSchema(this["~schema"].defined) as S)
 			: this["~schema"].defined;
-		const compiled = buildTypeBoxSchema(schemaToLoad);
-		addSmartDefaults(compiled);
-		this["~schema"].compiled = compiled;
+		this["~schema"].compiled = compileSchema(schemaToLoad);
 
 		const result = this["~driver"].load(schemaToLoad);
 

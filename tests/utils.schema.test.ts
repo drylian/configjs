@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
-import { addSmartDefaults, buildTypeBoxSchema, makeSchemaOptional } from '../src/utils/schema';
+import { describe, it, test, expect } from 'bun:test';
+import { addSmartDefaults, buildTypeBoxSchema, compileSchema, makeSchemaOptional, optionalSchema } from '../src/utils/schema';
 import { c } from '../src/factory';
 import { Type, type TObject } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -116,4 +116,30 @@ describe('Utils: schema.ts', () => {
             expect(Value.Check(schema, { database: { url: "x" } })).toBe(true);
         });
     });
+});
+
+describe("compileSchema memoization", () => {
+	test("reuses the compiled schema for the same definition", () => {
+		const definition = { port: c.Number({ default: 3000 }) };
+		expect(compileSchema(definition)).toBe(compileSchema(definition));
+	});
+
+	test("compiles distinct definitions separately", () => {
+		const a = { port: c.Number({ default: 3000 }) };
+		const b = { port: c.Number({ default: 3000 }) };
+		expect(compileSchema(a)).not.toBe(compileSchema(b));
+	});
+
+	test("refreshes createms defaults on reuse", async () => {
+		const definition = { created: c.createms() };
+		const first = (compileSchema(definition).properties.created as any).default;
+		await Bun.sleep(2);
+		const second = (compileSchema(definition).properties.created as any).default;
+		expect(second).toBeGreaterThan(first);
+	});
+
+	test("optionalSchema is memoized too", () => {
+		const definition = { port: c.Number({ default: 3000 }) };
+		expect(optionalSchema(definition)).toBe(optionalSchema(definition));
+	});
 });

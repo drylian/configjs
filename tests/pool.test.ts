@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { c, JsonDriver, Kfg, KfgScopeError } from "../src";
+import { c, JsonDriver, Kfg, KfgScopeError, KfgValidationError } from "../src";
 
 const schema = {
 	tks: {
@@ -143,5 +143,92 @@ describe("API parity", () => {
 		expect(() => {
 			(config as any).limit = 3;
 		}).toThrow(/read-only/);
+	});
+});
+
+describe("lazy loading", () => {
+	test("a lazy instance loads on first access", () => {
+		const instance = new Kfg(
+			new JsonDriver({ path: join(root, "lazy", "config.json") }),
+			schema,
+			{ lazy: true },
+		);
+
+		expect(instance["~loaded"]).toBe(false);
+		expect(instance.get("limit")).toBe(10);
+		expect(instance["~loaded"]).toBe(true);
+	});
+
+	test("a non-lazy instance still requires load()", () => {
+		const instance = new Kfg(
+			new JsonDriver({ path: join(root, "eager", "config.json") }),
+			schema,
+		);
+		expect(() => instance.get("limit")).toThrow(/not loaded/i);
+	});
+
+	test("lazy is rejected for async drivers", () => {
+		const asyncDriver = new JsonDriver({
+			path: join(root, "async", "config.json"),
+		});
+		(asyncDriver as any).async = true;
+
+		expect(
+			() => new Kfg(asyncDriver as any, schema, { lazy: true }),
+		).toThrow(/synchronous driver/);
+	});
+
+	test("pool instances are lazy: no file is written before first access", () => {
+		const pool = makePool();
+		const instance = pool.for("111");
+
+		expect(existsSync(join(root, "111", "config.json"))).toBe(false);
+		expect(instance.get("limit")).toBe(10);
+	});
+});
+
+describe("KfgValidationError", () => {
+	const strict = { limit: c.Number({ minimum: 1, default: 1 }) };
+
+	const writeRaw = (id: string, body: string) => {
+		mkdirSync(join(root, id), { recursive: true });
+		writeFileSync(join(root, id, "config.json"), body);
+	};
+
+	test("a broken scope throws instead of exiting the process", () => {
+		writeRaw("bad", '{"limit":"not-a-number"}');
+		const pool = Kfg.pool(strict, {
+			driver: (id: string) =>
+				new JsonDriver({
+					path: join(root, id, "config.json"),
+					forceExit: true,
+				} as any),
+		});
+
+		let caught: KfgValidationError | undefined;
+		try {
+			pool.for("bad").get("limit");
+		} catch (error) {
+			caught = error as KfgValidationError;
+		}
+
+		expect(caught).toBeInstanceOf(KfgValidationError);
+		expect(caught?.scope).toBe("bad");
+		expect(caught?.kind).toBe("schema");
+		expect(caught?.paths).toContain("limit");
+		// The formatted message is unchanged, so string readers keep working.
+		expect(caught?.message).toContain("[KFG] Invalid JSON configuration.");
+	});
+
+	test("other scopes keep working after one fails", () => {
+		writeRaw("bad", '{"limit":"not-a-number"}');
+		const pool = Kfg.pool(strict, {
+			driver: (id: string) =>
+				new JsonDriver({ path: join(root, id, "config.json") }),
+		});
+
+		expect(() => pool.for("bad").get("limit")).toThrow(KfgValidationError);
+		pool.for("good").set("limit", 3);
+		expect(pool.for("good").get("limit")).toBe(3);
 	});
 });

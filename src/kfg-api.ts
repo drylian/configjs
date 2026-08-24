@@ -18,6 +18,26 @@ export type KfgLoadOptions<D extends KfgDriver<any, any>> = Partial<
 	only_importants?: boolean;
 };
 
+/** Per-instance options, independent of the driver's own configuration. */
+export interface KfgOptions<D extends KfgDriver<any, any>> {
+	/**
+	 * Loads on first access instead of requiring an explicit `load()`.
+	 * Synchronous drivers only — an async load cannot be hidden behind a
+	 * synchronous `get()`.
+	 */
+	lazy?: boolean;
+	/** Load options used by the lazy auto-load. */
+	load?: KfgLoadOptions<D>;
+	/**
+	 * Overrides the driver's `forceExit`. Set it to `false` when one broken
+	 * configuration must not take the whole process down (the validation error
+	 * is thrown instead).
+	 */
+	forceExit?: boolean;
+	/** Scope id this instance belongs to, attached to validation errors. */
+	scope?: string;
+}
+
 /**
  * The public surface shared by `Kfg` and `KfgPool`.
  *

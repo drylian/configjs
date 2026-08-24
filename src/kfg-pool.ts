@@ -38,6 +38,11 @@ export interface KfgPoolOptions<D extends SyncDriver> {
 	 * request store, ...) and should stay the single source of truth.
 	 */
 	resolve?: () => string | null | undefined;
+	/**
+	 * Overrides the per-instance `forceExit`, which the pool forces to `false`
+	 * by default. Only set it if a broken scope really should exit the process.
+	 */
+	forceExit?: boolean;
 }
 
 /**
@@ -78,8 +83,15 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		const instance = new Kfg<D, S>(
 			this["~options"].driver(id),
 			this["~schemaDef"],
+			{
+				lazy: true,
+				load: this["~options"].load,
+				// One broken scope must never take the process down: a pool always
+				// throws KfgValidationError so the host can isolate that scope.
+				forceExit: this["~options"].forceExit ?? false,
+				scope: id,
+			},
 		);
-		instance.load(this["~options"].load);
 		this["~instances"].set(id, instance);
 		return instance;
 	}

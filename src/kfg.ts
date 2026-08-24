@@ -1,7 +1,12 @@
 import type { TObject } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { defaultValidationMessage, notLoadedMessage } from "./errors";
-import type { KfgApi, KfgLoadOptions } from "./kfg-api";
+import {
+	defaultValidationMessage,
+	issuePaths,
+	KfgValidationError,
+	notLoadedMessage,
+} from "./errors";
+import type { KfgApi, KfgLoadOptions, KfgOptions } from "./kfg-api";
 import type { KfgDriver } from "./kfg-driver";
 import { KfgPool, type KfgPoolOptions, type SyncDriver } from "./kfg-pool";
 import type {
@@ -23,6 +28,7 @@ import { compileSchema, optionalSchema } from "./utils/schema";
 export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	implements KfgApi<D, S>
 {
+	public readonly "~options": KfgOptions<D>;
 	public readonly "~driver": D;
 	public readonly "~schema": { defined: S; compiled: TObject };
 	private "~lastLoadOptions"?: KfgLoadOptions<D> | undefined;
@@ -55,8 +61,15 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		return new KfgPool<D, S>(schema, options);
 	}
 
-	constructor(driver: D, schema: S) {
+	constructor(driver: D, schema: S, options: KfgOptions<D> = {}) {
 		this["~driver"] = driver;
+		this["~options"] = options;
+
+		if (options.lazy && driver.async) {
+			throw new Error(
+				"[KFG] `lazy` requires a synchronous driver: an async load cannot be hidden behind a synchronous get().",
+			);
+		}
 
 		const compiled = compileSchema(schema);
 
@@ -70,9 +83,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			{},
 			{
 				get: (_target, prop) => {
-					if (!this["~loaded"]) {
-						throw new Error(notLoadedMessage("reading from config proxy"));
-					}
+					this["~ensureLoaded"]("reading from config proxy");
 					return Reflect.get(this["~cache"], prop);
 				},
 				set: () => {
@@ -137,16 +148,34 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		return this.load(nextOptions);
 	}
 
+	/**
+	 * Guards every operation that needs loaded data. With `lazy`, the first
+	 * access loads instead of throwing — transparent because it only applies to
+	 * synchronous drivers.
+	 */
+	private "~ensureLoaded"(operation: string): void {
+		if (this["~loaded"]) return;
+		if (this["~options"].lazy) {
+			this.load(this["~options"].load);
+			return;
+		}
+		throw new Error(notLoadedMessage(operation));
+	}
+
+	/** Effective forceExit: the instance option wins over the driver's. */
+	private "~shouldForceExit"(): boolean {
+		return this["~options"].forceExit ?? this["~driver"].forceExit;
+	}
+
 	public save(): inPromise<D["async"], void> {
-		if (!this["~loaded"]) throw new Error(notLoadedMessage("saving"));
+		this["~ensureLoaded"]("saving");
 		return this["~driver"].save(this["~cache"]) as any;
 	}
 
 	public get<P extends Paths<StaticSchema<S>>>(
 		path: P,
 	): DeepGet<StaticSchema<S>, P> {
-		if (!this["~loaded"])
-			throw new Error(notLoadedMessage(`reading "${String(path)}"`));
+		this["~ensureLoaded"](`reading "${String(path)}"`);
 		return getProperty(this["~cache"], path as string);
 	}
 
@@ -161,8 +190,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		value: DeepGet<StaticSchema<S>, P>,
 		descriptionOrOptions?: string | { description?: string },
 	): inPromise<D["async"], void> {
-		if (!this["~loaded"])
-			throw new Error(notLoadedMessage(`writing "${String(path)}"`));
+		this["~ensureLoaded"](`writing "${String(path)}"`);
 
 		let description =
 			typeof descriptionOrOptions === "string"
@@ -212,9 +240,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		path: P,
 		partial: Partial<DeepGet<StaticSchema<S>, P>>,
 	): inPromise<D["async"], void> {
-		if (!this["~loaded"]) {
-			throw new Error(notLoadedMessage(`inserting into "${String(path)}"`));
-		}
+		this["~ensureLoaded"](`inserting into "${String(path)}"`);
 
 		const currentObject = getProperty(this["~cache"], path as string);
 		if (typeof currentObject !== "object" || currentObject === null) {
@@ -255,9 +281,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	public inject(data: Partial<StaticSchema<S>>): inPromise<D["async"], void> {
-		if (!this["~loaded"]) {
-			throw new Error(notLoadedMessage("injecting data"));
-		}
+		this["~ensureLoaded"]("injecting data");
 
 		if (this.mutateSetEnabled()) {
 			return this.runMutation((draft) => deepMerge(draft as any, data) as any);
@@ -282,8 +306,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	public del<P extends Paths<StaticSchema<S>>>(
 		path: P,
 	): inPromise<D["async"], void> {
-		if (!this["~loaded"])
-			throw new Error(notLoadedMessage(`deleting "${String(path)}"`));
+		this["~ensureLoaded"](`deleting "${String(path)}"`);
 
 		if (this.mutateSetEnabled()) {
 			return this.runMutation((draft) => {
@@ -378,18 +401,14 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	public has<P extends Paths<StaticSchema<S>>>(...paths: P[]): boolean {
-		if (!this["~loaded"]) {
-			throw new Error(notLoadedMessage("checking paths"));
-		}
+		this["~ensureLoaded"]("checking paths");
 		return paths.every(
 			(path) => getProperty(this["~cache"], path as string) !== undefined,
 		);
 	}
 
 	public conf<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {
-		if (!this["~loaded"]) {
-			throw new Error(notLoadedMessage(`reading schema for "${String(path)}"`));
-		}
+		this["~ensureLoaded"](`reading schema for "${String(path)}"`);
 		return getProperty(this["~schema"].defined, path as string) as DeepGet<
 			S,
 			P
@@ -440,12 +459,17 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 				}
 			}
 
-			if (allowForceExit && this["~driver"].forceExit) {
+			if (allowForceExit && this["~shouldForceExit"]()) {
 				console.error(message);
 				process.exit(1);
 			}
 
-			throw new Error(message);
+			throw new KfgValidationError(message, {
+				kind: "schema",
+				errors,
+				paths: issuePaths(errors),
+				scope: this["~options"].scope,
+			});
 		}
 
 		this.applyRefines(current, allowForceExit);
@@ -459,6 +483,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	 */
 	private applyRefines(data: any, allowForceExit: boolean): void {
 		const failures: string[] = [];
+		const failedPaths: string[] = [];
 
 		const walk = (node: any, value: any, dotPath: string): void => {
 			if (!node || typeof node !== "object") return;
@@ -473,6 +498,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 						const result = refine(value);
 						if (result !== true) {
 							const label = dotPath || "(root)";
+							failedPaths.push(label);
 							failures.push(
 								`- ${label}: ${typeof result === "string" ? result : "failed refine validation"}`,
 							);
@@ -502,18 +528,21 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			const message = ["[KFG] Refine validation failed:", ...failures].join(
 				"\n",
 			);
-			if (allowForceExit && this["~driver"].forceExit) {
+			if (allowForceExit && this["~shouldForceExit"]()) {
 				console.error(message);
 				process.exit(1);
 			}
-			throw new Error(message);
+			throw new KfgValidationError(message, {
+				kind: "refine",
+				errors: failures,
+				paths: failedPaths,
+				scope: this["~options"].scope,
+			});
 		}
 	}
 
 	public toJSON(): inPromise<D["async"], StaticSchema<S>> {
-		if (!this["~loaded"]) {
-			throw new Error(notLoadedMessage("exporting JSON"));
-		}
+		this["~ensureLoaded"]("exporting JSON");
 		if (this["~driver"].async) {
 			return Promise.resolve(this["~cache"] as StaticSchema<S>) as any;
 		}

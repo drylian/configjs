@@ -39,3 +39,20 @@ export function defaultValidationMessage(issues: ValidationIssue[]): string {
 		...lines,
 	].join("\n");
 }
+
+/**
+ * Thrown when a pooled operation runs with no active scope and no
+ * `defaultScope` configured. Carries the attempted operation so the caller can
+ * tell which call site is missing its scope.
+ */
+export class KfgScopeError extends Error {
+	public readonly operation: string;
+
+	constructor(operation: string) {
+		super(
+			`[KFG] No active scope while ${operation}. Use pool.run(id, fn), pool.for(id), or configure a defaultScope.`,
+		);
+		this.name = "KfgScopeError";
+		this.operation = operation;
+	}
+}

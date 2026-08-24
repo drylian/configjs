@@ -1,7 +1,9 @@
 import type { TObject } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { defaultValidationMessage, notLoadedMessage } from "./errors";
+import type { KfgApi, KfgLoadOptions } from "./kfg-api";
 import type { KfgDriver } from "./kfg-driver";
+import { KfgPool, type KfgPoolOptions, type SyncDriver } from "./kfg-pool";
 import type {
 	DeepGet,
 	inPromise,
@@ -22,12 +24,12 @@ import {
 	makeSchemaOptional,
 } from "./utils/schema";
 
-export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition> {
+export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
+	implements KfgApi<D, S>
+{
 	public readonly "~driver": D;
 	public readonly "~schema": { defined: S; compiled: TObject };
-	private "~lastLoadOptions"?:
-		| (Partial<D["config"]> & { only_importants?: boolean })
-		| undefined;
+	private "~lastLoadOptions"?: KfgLoadOptions<D> | undefined;
 
 	// Internal state
 	public "~cache": Record<string, any> = {};
@@ -44,6 +46,17 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition> {
 
 	public get schema(): S {
 		return this["~schema"].defined;
+	}
+
+	/**
+	 * Creates a pool of instances keyed by scope id, exposing this same API.
+	 * See {@link KfgPool}.
+	 */
+	public static pool<D extends SyncDriver, S extends SchemaDefinition>(
+		schema: S,
+		options: KfgPoolOptions<D>,
+	): KfgPool<D, S> {
+		return new KfgPool<D, S>(schema, options);
 	}
 
 	constructor(driver: D, schema: S) {
@@ -87,11 +100,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition> {
 	/**
 	 * Loads the configuration from the driver.
 	 */
-	public load(
-		options?: Partial<D["config"]> & {
-			only_importants?: boolean;
-		},
-	): inPromise<D["async"], void> {
+	public load(options?: KfgLoadOptions<D>): inPromise<D["async"], void> {
 		this["~lastLoadOptions"] = options;
 		if (options) {
 			const { only_importants: _onlyImportants, ...driverConfig } =
@@ -129,11 +138,7 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition> {
 		return undefined as any;
 	}
 
-	public reload(
-		options?: Partial<D["config"]> & {
-			only_importants?: boolean;
-		},
-	): inPromise<D["async"], void> {
+	public reload(options?: KfgLoadOptions<D>): inPromise<D["async"], void> {
 		this["~loaded"] = false;
 		const nextOptions = options ?? this["~lastLoadOptions"];
 		return this.load(nextOptions);

@@ -232,3 +232,51 @@ describe("KfgValidationError", () => {
 		expect(pool.for("good").get("limit")).toBe(3);
 	});
 });
+
+describe("ambient scope", () => {
+	test("run() sets the scope for everything inside it", () => {
+		const pool = makePool();
+
+		pool.run("111", () => pool.set("limit", 1));
+		pool.run("222", () => pool.set("limit", 2));
+
+		expect(pool.run("111", () => pool.get("limit"))).toBe(1);
+		expect(pool.run("222", () => pool.get("limit"))).toBe(2);
+		expect(pool.current()).toBeNull();
+	});
+
+	test("the scope survives awaits", async () => {
+		const pool = makePool();
+
+		await pool.run("111", async () => {
+			await Bun.sleep(1);
+			pool.set("limit", 9);
+			expect(pool.scope()).toBe("111");
+		});
+
+		expect(pool.for("111").get("limit")).toBe(9);
+	});
+
+	test("nested run() wins for its own body", () => {
+		const pool = makePool();
+
+		pool.run("111", () => {
+			expect(pool.current()).toBe("111");
+			pool.run("222", () => expect(pool.current()).toBe("222"));
+			expect(pool.current()).toBe("111");
+		});
+	});
+
+	test("run() outranks resolve(), which outranks defaultScope", () => {
+		const pool = makePool({ resolve: () => "111", defaultScope: "global" });
+
+		expect(pool.current()).toBe("111");
+		expect(pool.run("222", () => pool.current())).toBe("222");
+	});
+
+	test("defaultScope still applies outside any scope", () => {
+		const pool = makePool({ defaultScope: "global", onMissingScope: () => {} });
+		expect(pool.get("limit")).toBe(10);
+		expect(pool.missingScopeCount).toBe(1);
+	});
+});

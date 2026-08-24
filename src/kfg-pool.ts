@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { KfgScopeError } from "./errors";
 import { Kfg } from "./kfg";
 import type { KfgApi, KfgLoadOptions } from "./kfg-api";
@@ -33,9 +34,10 @@ export interface KfgPoolOptions<D extends SyncDriver> {
 	 */
 	onMissingScope?: (operation: string, defaultScope: string) => void;
 	/**
-	 * External scope resolver, consulted before anything else. Use it when the
-	 * host already owns the ambient context (its own AsyncLocalStorage, a
-	 * request store, ...) and should stay the single source of truth.
+	 * External scope resolver, consulted when no `run()` is active. Use it when
+	 * the host already owns the ambient context (its own AsyncLocalStorage, a
+	 * request store, ...) and should stay the single source of truth. An
+	 * enclosing `run()` still wins, since it is explicit at the call site.
 	 */
 	resolve?: () => string | null | undefined;
 	/**
@@ -50,7 +52,8 @@ export interface KfgPoolOptions<D extends SyncDriver> {
  * single instance.
  *
  * Every read/write is routed to the instance for the currently active scope,
- * resolved in this order: `options.resolve()`, then `options.defaultScope`.
+ * resolved in this order: an enclosing `run()`, then `options.resolve()`, then
+ * `options.defaultScope`.
  * `for(id)` addresses an instance explicitly and is a first-class entry point —
  * background jobs and dashboards have no ambient scope to rely on.
  *
@@ -63,6 +66,8 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	private readonly "~schemaDef": S;
 	private readonly "~options": KfgPoolOptions<D>;
 	private readonly "~instances" = new Map<string, Kfg<D, S>>();
+	/** Ambient scope for run(), following the async call tree. */
+	private readonly "~storage" = new AsyncLocalStorage<string>();
 
 	/** How many operations have fallen back to `defaultScope`. */
 	public missingScopeCount = 0;
@@ -96,13 +101,32 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		return instance;
 	}
 
+	/**
+	 * Runs `fn` with `id` as the active scope. The scope follows the async call
+	 * tree, so everything `fn` awaits sees it too — including code that never
+	 * received the id as an argument. Returns whatever `fn` returns.
+	 */
+	public run<T>(id: string, fn: () => T): T {
+		return this["~storage"].run(id, fn);
+	}
+
 	/** The scope that would be used right now, or `null` if there is none. */
 	public current(): string | null {
+		// An enclosing run() is explicit at the call site, so it outranks the
+		// host-provided resolver.
+		const ambient = this["~storage"].getStore();
+		if (ambient !== undefined && ambient !== "") return ambient;
+
 		const resolved = this["~options"].resolve?.();
 		if (resolved !== undefined && resolved !== null && resolved !== "") {
 			return resolved;
 		}
 		return null;
+	}
+
+	/** Alias of {@link current}. */
+	public scope(): string | null {
+		return this.current();
 	}
 
 	/** Ids of the instances currently held by the pool. */

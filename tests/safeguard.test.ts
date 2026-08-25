@@ -222,3 +222,23 @@ describe("safeguard: atomic writes", () => {
 		expect(fs.existsSync(`${filePath}.lock`)).toBe(false);
 	});
 });
+
+describe("backup directory creation", () => {
+	test("creates a missing backup directory on first write", () => {
+		const dir = path.join(tmpDir, `bakdir-${Date.now()}`);
+		const file = path.join(dir, "config.json");
+		const bak = path.join(dir, "nested", "deep", "config.bak.json");
+		fs.mkdirSync(dir, { recursive: true });
+
+		try {
+			safeWriteFileSync(file, '{"a":1}', { backup: bak });
+			expect(fs.existsSync(bak)).toBe(true);
+
+			// Second write hits the fast path with the directory already there.
+			safeWriteFileSync(file, '{"a":2}', { backup: bak });
+			expect(fs.readFileSync(bak, "utf-8")).toBe('{"a":2}');
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});

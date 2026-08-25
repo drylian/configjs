@@ -76,8 +76,14 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	private readonly "~instances" = new Map<string, Kfg<D, S>>();
 	/** Ambient scope for run(), following the async call tree. */
 	private readonly "~storage" = new AsyncLocalStorage<string>();
-	/** Last access per instance, kept in least-recently-used order. */
-	private readonly "~lastUsed" = new Map<string, number>();
+	/** Access order per instance, tracked only when `max` is set. */
+	private readonly "~lruSeq" = new Map<string, number>();
+	/** Last access timestamp per instance, tracked only when `ttl` is set. */
+	private readonly "~lastAt" = new Map<string, number>();
+	/** Monotonic counter: a clock has too little resolution to order accesses. */
+	private "~seq" = 0;
+	/** Timestamp of the last ttl sweep, so the O(n) scan stays amortized. */
+	private "~lastSweep" = 0;
 
 	/** How many operations have fallen back to `defaultScope`. */
 	public missingScopeCount = 0;
@@ -96,11 +102,7 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 
 		const existing = this["~instances"].get(id);
 		if (existing) {
-			// Re-insert to move it to the most-recently-used end of the map.
-			this["~instances"].delete(id);
-			this["~instances"].set(id, existing);
-			this["~lastUsed"].delete(id);
-			this["~lastUsed"].set(id, Date.now());
+			this.touch(id);
 			return existing;
 		}
 
@@ -117,22 +119,41 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 			},
 		);
 		this["~instances"].set(id, instance);
-		this["~lastUsed"].set(id, Date.now());
+		this.touch(id);
 		this.evictOverflow();
 		return instance;
 	}
 
-	/** Evicts instances idle for longer than `ttl`, oldest first. */
+	/**
+	 * Records an access. Only updates existing keys — never delete+reinsert,
+	 * which would churn the map and make a hot lookup degrade with pool size.
+	 * Each policy is tracked only when it is actually configured, so the common
+	 * unbounded pool does no bookkeeping at all.
+	 */
+	private touch(id: string): void {
+		if (this["~options"].max !== undefined) {
+			this["~lruSeq"].set(id, ++this["~seq"]);
+		}
+		if (this["~options"].ttl !== undefined) {
+			this["~lastAt"].set(id, Date.now());
+		}
+	}
+
+	/**
+	 * Evicts instances idle for longer than `ttl`. The sweep is O(n), so it runs
+	 * at most once per `ttl` (and at most once a second) instead of per access.
+	 */
 	private evictExpired(): void {
 		const ttl = this["~options"].ttl;
 		if (ttl === undefined) return;
 
-		const deadline = Date.now() - ttl;
-		for (const [id, used] of this["~lastUsed"]) {
-			// The map is kept in least-recently-used order, so the first live
-			// entry ends the sweep.
-			if (used > deadline) break;
-			this.dispose(id);
+		const now = Date.now();
+		if (now - this["~lastSweep"] < Math.min(ttl, 1000)) return;
+		this["~lastSweep"] = now;
+
+		const deadline = now - ttl;
+		for (const [id, used] of [...this["~lastAt"]]) {
+			if (used <= deadline) this.dispose(id);
 		}
 	}
 
@@ -142,9 +163,16 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		if (max === undefined) return;
 
 		while (this["~instances"].size > max) {
-			const oldest = this["~instances"].keys().next();
-			if (oldest.done) break;
-			this.dispose(oldest.value);
+			let oldestId: string | undefined;
+			let oldestUsed = Number.POSITIVE_INFINITY;
+			for (const [id, used] of this["~lruSeq"]) {
+				if (used < oldestUsed) {
+					oldestUsed = used;
+					oldestId = id;
+				}
+			}
+			if (oldestId === undefined) break;
+			this.dispose(oldestId);
 		}
 	}
 
@@ -191,7 +219,8 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	 * state is untouched; the next access builds a fresh instance.
 	 */
 	public dispose(id: string): boolean {
-		this["~lastUsed"].delete(id);
+		this["~lruSeq"].delete(id);
+		this["~lastAt"].delete(id);
 		return this["~instances"].delete(id);
 	}
 
@@ -218,7 +247,9 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	/** Drops every instance, emptying the pool. */
 	public clear(): void {
 		this["~instances"].clear();
-		this["~lastUsed"].clear();
+		this["~lruSeq"].clear();
+		this["~lastAt"].clear();
+		this["~lastSweep"] = 0;
 	}
 
 	/**

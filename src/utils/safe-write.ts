@@ -192,8 +192,15 @@ function atomicWriteUnlocked(
 	const bak = backupPathFor(filePath, options.backup ?? true);
 	if (bak) {
 		try {
-			fs.mkdirSync(path.dirname(bak), { recursive: true });
-			fs.copyFileSync(filePath, bak);
+			// Try the copy first: creating the directory on every write costs a
+			// syscall per save and is almost always a no-op.
+			try {
+				fs.copyFileSync(filePath, bak);
+			} catch (e: any) {
+				if (e?.code !== "ENOENT") throw e;
+				fs.mkdirSync(path.dirname(bak), { recursive: true });
+				fs.copyFileSync(filePath, bak);
+			}
 		} catch (e) {
 			console.warn(`[Kfg] Could not update backup "${bak}":`, e);
 		}

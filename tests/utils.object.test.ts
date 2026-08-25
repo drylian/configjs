@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
-import { flattenObject, unflattenObject, getProperty, setProperty, deepMerge, isObject } from '../src/utils/object';
+import { describe, it, test, expect } from 'bun:test';
+import { flattenObject, unflattenObject, getProperty, pathSegments, setProperty, deepMerge, isObject } from '../src/utils/object';
 
 describe('Utils: object.ts', () => {
     describe('getProperty()', () => {
@@ -100,4 +100,25 @@ describe('Utils: object.ts', () => {
             expect(unflattenObject(obj)).toEqual(obj);
         });
     });
+});
+describe("pathSegments cache", () => {
+	test("memoizes and returns equal segments", () => {
+		expect(pathSegments("a.b.c")).toEqual(["a", "b", "c"]);
+		expect(pathSegments("a.b.c")).toBe(pathSegments("a.b.c"));
+		expect(pathSegments("a")).toEqual(["a"]);
+	});
+
+	test("stays bounded when paths are built dynamically", () => {
+		for (let i = 0; i < 5000; i++) pathSegments(`dyn${i}.leaf`);
+		// The cache resets instead of growing without bound.
+		expect(getProperty({ a: { b: 1 } }, "a.b")).toBe(1);
+	});
+
+	test("a mutated result never corrupts later reads", () => {
+		const obj = { a: { b: { c: 7 } } };
+		expect(getProperty(obj, "a.b.c")).toBe(7);
+		expect(getProperty(obj, "a.b.c")).toBe(7);
+		expect(getProperty(obj, "a.b")).toEqual({ c: 7 });
+		expect(getProperty(obj, "missing.deep.path")).toBeUndefined();
+	});
 });

@@ -192,8 +192,18 @@ function atomicWriteUnlocked(
 	const bak = backupPathFor(filePath, options.backup ?? true);
 	if (bak) {
 		try {
-			fs.mkdirSync(path.dirname(bak), { recursive: true });
-			fs.copyFileSync(filePath, bak);
+			// Write the backup from the verified content in memory rather than
+			// copying the file back off disk: same result (the target was just
+			// verified to hold exactly this), at half the cost. Creating the
+			// directory is left for the ENOENT retry — it is a no-op after the
+			// first save, and paying a syscall per write for it is not worth it.
+			try {
+				fs.writeFileSync(bak, content, "utf-8");
+			} catch (e: any) {
+				if (e?.code !== "ENOENT") throw e;
+				fs.mkdirSync(path.dirname(bak), { recursive: true });
+				fs.writeFileSync(bak, content, "utf-8");
+			}
 		} catch (e) {
 			console.warn(`[Kfg] Could not update backup "${bak}":`, e);
 		}

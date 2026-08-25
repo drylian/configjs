@@ -9,8 +9,13 @@ import type { SchemaDefinition } from "../types";
 /**
  * Adds smart defaults to a TypeBox schema.
  * @param schemaNode The schema to add the defaults to.
+ * @param createmsNodes Optional sink collecting the nodes whose default is a
+ * `createms` timestamp, so a cached schema can refresh them on reuse.
  */
-export function addSmartDefaults(schemaNode: TObject): void {
+export function addSmartDefaults(
+	schemaNode: TObject,
+	createmsNodes?: TSchema[],
+): void {
 	if (schemaNode.type !== "object" || !schemaNode.properties) {
 		return;
 	}
@@ -29,11 +34,12 @@ export function addSmartDefaults(schemaNode: TObject): void {
 		}
 		if ((prop as any).createms) {
 			(prop as any).default = Date.now();
+			createmsNodes?.push(prop);
 		}
 
 		// Only recurse if the property is a valid TypeBox object schema
 		if (prop.type === "object" && prop[Symbol.for("TypeBox.Kind") as any]) {
-			addSmartDefaults(prop as TObject);
+			addSmartDefaults(prop as TObject, createmsNodes);
 		}
 		const hasDefault = prop.default !== undefined;
 		// Behavioral check for optionality
@@ -73,6 +79,58 @@ export function buildTypeBoxSchema(definition: SchemaDefinition): TObject {
 	return Type.Object(properties, { additionalProperties: true });
 }
 
+type CompiledEntry = {
+	compiled: TObject;
+	/** Nodes whose default is a `createms` timestamp, refreshed on every reuse. */
+	createmsNodes: TSchema[];
+};
+
+/**
+ * Compiled schemas, keyed by the identity of the definition object they came
+ * from. Building a schema walks the whole tree and runs a `Value.Check` per
+ * property, which is by far the most expensive part of `load()` — and a pool
+ * would otherwise pay it once per scope.
+ */
+const compiledCache = new WeakMap<object, CompiledEntry>();
+
+/** `makeSchemaOptional` results, so `only_importants` also reuses one object. */
+const optionalCache = new WeakMap<object, SchemaDefinition>();
+
+/**
+ * Compiles a schema definition into a TypeBox object with smart defaults
+ * applied, memoized by the definition's identity.
+ *
+ * The compiled schema is only read during validation, so instances can safely
+ * share it. Time-based `createms` defaults are the one part that must not be
+ * frozen, and are recomputed on every call.
+ */
+export function compileSchema(definition: SchemaDefinition): TObject {
+	const cached = compiledCache.get(definition as object);
+	if (cached) {
+		for (const node of cached.createmsNodes) {
+			(node as any).default = Date.now();
+		}
+		return cached.compiled;
+	}
+
+	const compiled = buildTypeBoxSchema(definition);
+	const createmsNodes: TSchema[] = [];
+	addSmartDefaults(compiled, createmsNodes);
+
+	compiledCache.set(definition as object, { compiled, createmsNodes });
+	return compiled;
+}
+
+/** Memoized {@link makeSchemaOptional}, keyed by the definition's identity. */
+export function optionalSchema(definition: SchemaDefinition): SchemaDefinition {
+	const cached = optionalCache.get(definition as object);
+	if (cached) return cached;
+
+	const optional = makeSchemaOptional(definition);
+	optionalCache.set(definition as object, optional);
+	return optional;
+}
+
 /**
  * Builds a default object from a schema definition.
  * It converts the definition to a TypeBox schema, adds smart defaults,
@@ -84,8 +142,7 @@ export function buildTypeBoxSchema(definition: SchemaDefinition): TObject {
 export function buildDefaultObject(
 	definition: SchemaDefinition,
 ): Record<string, any> {
-	const schema = buildTypeBoxSchema(definition);
-	addSmartDefaults(schema);
+	const schema = compileSchema(definition);
 	return Value.Default(schema, {}) as Record<string, any>;
 }
 

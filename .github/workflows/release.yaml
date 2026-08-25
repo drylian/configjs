@@ -32,10 +32,12 @@ jobs:
       - name: Setup Node for Publishing
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted Publishing (OIDC) requires npm >= 11.5.1; node 20 ships npm 10.
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1. Node 24 ships npm 11,
+      # and npm@latest (12.x) itself requires node >= 22.22 — node 20 satisfies
+      # neither, which is what broke the v1.7.0 publish.
       - name: Update npm for trusted publishing
         run: npm install -g npm@latest
 

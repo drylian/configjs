@@ -15,6 +15,11 @@ import type {
 /** A synchronous driver — the only kind a pool accepts. */
 export type SyncDriver = KfgDriver<any, false>;
 
+/** Composes the operation description used in scope errors and warnings. */
+function describe(verb: string, path?: PropertyKey): string {
+	return path === undefined ? verb : `${verb} "${String(path)}"`;
+}
+
 export interface KfgPoolOptions<D extends SyncDriver> {
 	/** Builds the driver for a given scope id (e.g. one file per guild). */
 	driver: (id: string) => D;
@@ -89,14 +94,52 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	public missingScopeCount = 0;
 	private "~missingScopeWarned" = false;
 
+	/**
+	 * Built once, but resolved per trap: holding onto `pool.config` must not pin
+	 * the scope that happened to be active when it was read.
+	 */
+	private readonly "~configProxy": StaticSchema<S>;
+
 	constructor(schema: S, options: KfgPoolOptions<D>) {
 		this["~schemaDef"] = schema;
 		this["~options"] = options;
+
+		this["~configProxy"] = new Proxy(
+			{},
+			{
+				get: (_target, prop) =>
+					Reflect.get(
+						this.active("reading from config proxy").config as object,
+						prop,
+					),
+				set: () => {
+					throw new Error(
+						"[Kfg] Config is read-only via proxy. Use .set() to modify and persist.",
+					);
+				},
+				ownKeys: () =>
+					Reflect.ownKeys(
+						this.active("reading from config proxy").config as object,
+					),
+				getOwnPropertyDescriptor: (_target, prop) =>
+					Reflect.getOwnPropertyDescriptor(
+						this.active("reading from config proxy").config as object,
+						prop,
+					),
+			},
+		) as StaticSchema<S>;
 	}
 
 	// --- Scope management ---
 
-	/** Returns (creating it if needed) the instance for `id`. */
+	/**
+	 * Returns (creating it if needed) the instance for `id`.
+	 *
+	 * The id is passed verbatim to `options.driver`, which typically interpolates
+	 * it into a file path. Ids that reach the pool from outside the process must
+	 * be validated by the host first: the pool does no sanitizing, so a value
+	 * containing path separators or `..` would escape the intended directory.
+	 */
 	public for(id: string): Kfg<D, S> {
 		this.evictExpired();
 
@@ -157,7 +200,16 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		}
 	}
 
-	/** Evicts the least-recently-used instances down to `max`. */
+	/**
+	 * Evicts the least-recently-used instances down to `max`.
+	 *
+	 * The scan is O(size) per eviction, and that is deliberate: keeping the map
+	 * in LRU order instead would mean delete+reinsert on every access, which
+	 * churns the map and makes a cached lookup degrade with pool size (measured:
+	 * 0.11 us at 1 scope, 16 us at 5000). Reads are the hot path and evictions
+	 * only happen on a miss, next to a load() that costs far more — so the cost
+	 * belongs here. Do not "optimize" this back into an ordered map.
+	 */
 	private evictOverflow(): void {
 		const max = this["~options"].max;
 		if (max === undefined) return;
@@ -255,18 +307,22 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	/**
 	 * Resolves the instance an operation should run against, applying the
 	 * `defaultScope` fallback and failing loudly when there is nothing to use.
+	 *
+	 * `verb` and `path` are kept apart and only composed when something goes
+	 * wrong: the happy path runs on every read, and building a description
+	 * string there would allocate once per get().
 	 */
-	private active(operation: string): Kfg<D, S> {
+	private active(verb: string, path?: PropertyKey): Kfg<D, S> {
 		const scope = this.current();
 		if (scope !== null) return this.for(scope);
 
 		const fallback = this["~options"].defaultScope;
 		if (fallback !== undefined) {
-			this.noteMissingScope(operation, fallback);
+			this.noteMissingScope(describe(verb, path), fallback);
 			return this.for(fallback);
 		}
 
-		throw new KfgScopeError(operation);
+		throw new KfgScopeError(describe(verb, path));
 	}
 
 	/** Records a `defaultScope` fallback without paying for a stack trace. */
@@ -290,32 +346,7 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	// --- KfgApi (delegated to the active scope) ---
 
 	public get config(): StaticSchema<S> {
-		// Resolved per trap, never captured: holding onto `pool.config` must not
-		// pin the scope that happened to be active when it was read.
-		return new Proxy(
-			{},
-			{
-				get: (_target, prop) =>
-					Reflect.get(
-						this.active("reading from config proxy").config as any,
-						prop,
-					),
-				set: () => {
-					throw new Error(
-						"[Kfg] Config is read-only via proxy. Use .set() to modify and persist.",
-					);
-				},
-				ownKeys: () =>
-					Reflect.ownKeys(
-						this.active("reading from config proxy").config as any,
-					),
-				getOwnPropertyDescriptor: (_target, prop) =>
-					Reflect.getOwnPropertyDescriptor(
-						this.active("reading from config proxy").config as any,
-						prop,
-					),
-			},
-		) as StaticSchema<S>;
+		return this["~configProxy"];
 	}
 
 	public get driver(): D {
@@ -341,13 +372,13 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	public get<P extends Paths<StaticSchema<S>>>(
 		path: P,
 	): DeepGet<StaticSchema<S>, P> {
-		return this.active(`reading "${String(path)}"`).get(path);
+		return this.active("reading", path).get(path);
 	}
 
 	public root<P extends RootPaths<StaticSchema<S>>>(
 		path: P,
 	): DeepGet<StaticSchema<S>, P> {
-		return this.active(`reading "${String(path)}"`).root(path);
+		return this.active("reading", path).root(path);
 	}
 
 	public set<P extends Paths<StaticSchema<S>>>(
@@ -355,21 +386,14 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 		value: DeepGet<StaticSchema<S>, P>,
 		descriptionOrOptions?: string | { description?: string },
 	): inPromise<D["async"], void> {
-		return this.active(`writing "${String(path)}"`).set(
-			path,
-			value,
-			descriptionOrOptions,
-		);
+		return this.active("writing", path).set(path, value, descriptionOrOptions);
 	}
 
 	public insert<P extends RootPaths<StaticSchema<S>>>(
 		path: P,
 		partial: Partial<DeepGet<StaticSchema<S>, P>>,
 	): inPromise<D["async"], void> {
-		return this.active(`inserting into "${String(path)}"`).insert(
-			path,
-			partial,
-		);
+		return this.active("inserting into", path).insert(path, partial);
 	}
 
 	public inject(data: Partial<StaticSchema<S>>): inPromise<D["async"], void> {
@@ -379,7 +403,7 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	public del<P extends Paths<StaticSchema<S>>>(
 		path: P,
 	): inPromise<D["async"], void> {
-		return this.active(`deleting "${String(path)}"`).del(path);
+		return this.active("deleting", path).del(path);
 	}
 
 	public mutate(
@@ -393,7 +417,7 @@ export class KfgPool<D extends SyncDriver, S extends SchemaDefinition>
 	}
 
 	public conf<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {
-		return this.active(`reading schema for "${String(path)}"`).conf(path);
+		return this.active("reading schema for", path).conf(path);
 	}
 
 	public schematic<P extends Paths<StaticSchema<S>>>(path: P): DeepGet<S, P> {

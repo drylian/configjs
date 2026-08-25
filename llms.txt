@@ -136,9 +136,62 @@ flag — the same API serves both):
 - `conf(path)` / `schematic(path)` — read the schema node at a path.
 - `toJSON()` — the validated config object.
 - `config` — a read-only proxy: `kfg.config.server.port` (use `set` to write).
+- `unload()` — drop the in-memory cache (persisted state untouched).
 
 All mutations validate against the schema and roll back the in-memory cache on
 failure (the persisted file is never left invalid).
+
+A third constructor argument takes per-instance options:
+
+```ts
+new Kfg(driver, schema, {
+  lazy: true,        // load on first access instead of requiring load()
+  load: { ... },     // options used by that automatic load
+  forceExit: false,  // override the driver's forceExit
+})
+```
+
+`lazy` requires a synchronous driver — an async load cannot be hidden behind a
+synchronous `get()`.
+
+Validation failures throw `KfgValidationError`: `.message` is the same
+formatted text as before (including a driver's `formatError` output), plus
+`kind` (`"schema"` / `"refine"`), `errors`, `paths` and `scope`.
+
+---
+
+## Scoped pools (`Kfg.pool`)
+
+One configuration per tenant/guild/project, with the exact same API as a single
+instance — call sites do not change:
+
+```ts
+const Config = Kfg.pool(schema, {
+  driver: (id) => new JsonDriver({ path: `data/${id}/config.json` }),
+  load: { only_importants: true },
+  max: 500,          // LRU ceiling (optional)
+  ttl: 30 * 60_000,  // evict after idleness (optional)
+});
+
+Config.run(guildId, () => Config.get("tks.category"));  // ambient scope
+Config.for(guildId).set("tks.category", "x");           // explicit scope
+```
+
+Scope resolution order: an enclosing `run()`, then `options.resolve()` (for
+hosts that own their own ambient context), then `options.defaultScope`. With
+none of them, an operation throws `KfgScopeError` instead of silently guessing.
+`defaultScope` is a migration aid: fallbacks are reported via `onMissingScope`
+or an aggregate `pool.missingScopeCount`.
+
+Pool management: `for(id)`, `ids()`, `size`, `each(fn)`, `dispose(id)` (drop
+the instance), `invalidate(id)` / `invalidateAll()` (unload in place, keeping
+the identity — use after writing a scope's file behind the pool's back),
+`clear()`, `current()` / `scope()`.
+
+Instances in a pool are lazy and never `forceExit`: one corrupted file throws
+`KfgValidationError` (carrying its `scope`) instead of taking the process down.
+Pools require a synchronous driver. Ids are passed verbatim to the `driver`
+factory, so the host must validate ids coming from outside the process.
 
 ---
 

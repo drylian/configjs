@@ -115,6 +115,36 @@ user1.set("inventory_ids", [inv1]);
 const user1Inventories = await user1.getMany("inventory_ids");
 ```
 
+## Scoped Configuration with `Kfg.pool`
+
+For one configuration per tenant, guild, or project, `Kfg.pool` keeps an instance per scope id and exposes **the exact same API** as a single instance — existing call sites keep their types and autocompletion:
+
+```typescript
+import { Kfg, JsonDriver, c } from "kfg";
+
+const Config = Kfg.pool(schema, {
+    driver: (id) => new JsonDriver({ path: `resources/guilds/${id}/config.json` }),
+    max: 500,            // keep at most 500 configs in memory (LRU)
+});
+
+// Ambient scope: everything inside sees this guild, including awaited code.
+await Config.run(guildId, async () => {
+    Config.get("tks.category");
+    Config.set("tks.enabled", true);
+});
+
+// Or address a scope explicitly — for dashboards and background jobs.
+Config.for(guildId).set("tks.enabled", false);
+```
+
+Instances are created on first access and reloaded lazily. A corrupted file for
+one scope throws a `KfgValidationError` carrying that `scope` instead of
+exiting the process, so the other scopes keep working.
+
+Without an active scope, operations throw `KfgScopeError` rather than guessing.
+During a migration you can set `defaultScope` and watch `missingScopeCount` (or
+pass `onMissingScope`) to find the call sites that still run outside a scope.
+
 ## License
 
 MIT

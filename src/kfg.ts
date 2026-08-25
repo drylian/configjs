@@ -177,14 +177,34 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		throw new Error(notLoadedMessage(operation));
 	}
 
+	/**
+	 * Runs a method body, turning a synchronous throw into a rejected promise
+	 * when the driver is async.
+	 *
+	 * These methods do their validation synchronously before handing anything to
+	 * the driver, so without this an async `set` could throw at the call site
+	 * even though its signature promises a `Promise` — breaking
+	 * `kfg.set(...).catch(...)` while `await kfg.set(...)` happened to work.
+	 */
+	private "~guard"<T>(run: () => T): T {
+		if (!this["~driver"].async) return run();
+		try {
+			return run();
+		} catch (error) {
+			return Promise.reject(error) as T;
+		}
+	}
+
 	/** Effective forceExit: the instance option wins over the driver's. */
 	private "~shouldForceExit"(): boolean {
 		return this["~options"].forceExit ?? this["~driver"].forceExit;
 	}
 
 	public save(): inPromise<D["async"], void> {
-		this["~ensureLoaded"]("saving");
-		return this["~driver"].save(this["~cache"]) as any;
+		return this["~guard"](() => {
+			this["~ensureLoaded"]("saving");
+			return this["~driver"].save(this["~cache"]) as any;
+		});
 	}
 
 	public get<P extends Paths<StaticSchema<S>>>(
@@ -201,6 +221,16 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	public set<P extends Paths<StaticSchema<S>>>(
+		path: P,
+		value: DeepGet<StaticSchema<S>, P>,
+		descriptionOrOptions?: string | { description?: string },
+	): inPromise<D["async"], void> {
+		return this["~guard"](() =>
+			this.setInternal(path, value, descriptionOrOptions),
+		);
+	}
+
+	private setInternal<P extends Paths<StaticSchema<S>>>(
 		path: P,
 		value: DeepGet<StaticSchema<S>, P>,
 		descriptionOrOptions?: string | { description?: string },
@@ -248,6 +278,13 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 		path: P,
 		partial: Partial<DeepGet<StaticSchema<S>, P>>,
 	): inPromise<D["async"], void> {
+		return this["~guard"](() => this.insertInternal(path, partial));
+	}
+
+	private insertInternal<P extends RootPaths<StaticSchema<S>>>(
+		path: P,
+		partial: Partial<DeepGet<StaticSchema<S>, P>>,
+	): inPromise<D["async"], void> {
 		this["~ensureLoaded"](`inserting into "${String(path)}"`);
 
 		const currentObject = getProperty(this["~cache"], path as string);
@@ -285,20 +322,30 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	public inject(data: Partial<StaticSchema<S>>): inPromise<D["async"], void> {
-		this["~ensureLoaded"]("injecting data");
+		return this["~guard"](() => {
+			this["~ensureLoaded"]("injecting data");
 
-		if (this.mutateSetEnabled()) {
-			return this.runMutation((draft) => deepMerge(draft as any, data) as any);
-		}
+			if (this.mutateSetEnabled()) {
+				return this.runMutation(
+					(draft) => deepMerge(draft as any, data) as any,
+				);
+			}
 
-		// deepMerge already returns a new tree, so there is nothing to roll back.
-		const draft = deepMerge(this["~cache"], data);
-		this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
+			// deepMerge already returns a new tree, so there is nothing to roll back.
+			const draft = deepMerge(this["~cache"], data);
+			this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
 
-		return this["~driver"].save(this["~cache"]) as any;
+			return this["~driver"].save(this["~cache"]) as any;
+		});
 	}
 
 	public del<P extends Paths<StaticSchema<S>>>(
+		path: P,
+	): inPromise<D["async"], void> {
+		return this["~guard"](() => this.delInternal(path));
+	}
+
+	private delInternal<P extends Paths<StaticSchema<S>>>(
 		path: P,
 	): inPromise<D["async"], void> {
 		this["~ensureLoaded"](`deleting "${String(path)}"`);
@@ -333,6 +380,12 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	 * `fn` may mutate the draft in place or return a replacement.
 	 */
 	public mutate(
+		fn: (draft: StaticSchema<S>) => StaticSchema<S> | undefined,
+	): inPromise<D["async"], void> {
+		return this["~guard"](() => this.mutateInternal(fn));
+	}
+
+	private mutateInternal(
 		fn: (draft: StaticSchema<S>) => StaticSchema<S> | undefined,
 	): inPromise<D["async"], void> {
 		return this.runMutation((draft) => (fn(draft) ?? draft) as any);
@@ -544,10 +597,12 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	}
 
 	public toJSON(): inPromise<D["async"], StaticSchema<S>> {
-		this["~ensureLoaded"]("exporting JSON");
-		if (this["~driver"].async) {
-			return Promise.resolve(this["~cache"] as StaticSchema<S>) as any;
-		}
-		return this["~cache"] as any;
+		return this["~guard"](() => {
+			this["~ensureLoaded"]("exporting JSON");
+			if (this["~driver"].async) {
+				return Promise.resolve(this["~cache"] as StaticSchema<S>) as any;
+			}
+			return this["~cache"] as any;
+		});
 	}
 }

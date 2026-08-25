@@ -20,6 +20,8 @@ kfg lets you declare a configuration schema once and get:
 - A safeguard layer: atomic temp-write+verify+rename, a lock file against
   concurrent writers, optional backup mirror with auto-recovery, and a
   transactional read-modify-write primitive that prevents lost updates.
+- Scoped pools (`Kfg.pool`) — one configuration per tenant/guild/project
+  behind the same API, so multi-tenancy does not change any call site.
 
 Runtime: works on Node.js, Bun, and Deno. The package ships CJS + ESM + d.ts.
 
@@ -193,6 +195,39 @@ Instances in a pool are lazy and never `forceExit`: one corrupted file throws
 Pools require a synchronous driver. Ids are passed verbatim to the `driver`
 factory, so the host must validate ids coming from outside the process.
 
+`for(id)` is a first-class entry point, not a fallback: background jobs,
+dashboards and admin tools have no ambient scope and should address instances
+explicitly. It returns a normal `Kfg`, so anything that accepts one accepts it.
+
+### Same type as a single instance
+
+`Kfg` and `KfgPool` both implement `KfgApi<D, S>` with identical generics.
+Write code against `KfgApi` when it should work with either:
+
+```ts
+function readTicketCategory(cfg: KfgApi<JsonDriver, typeof schema>) {
+  return cfg.get("tks.category"); // same dot-path typing in both
+}
+```
+
+Migrating an existing single-instance setup is a one-line change plus a scope:
+
+```ts
+// before
+export const Config = new Kfg(new JsonDriver({ path: "config.json" }), schema);
+Config.load();
+
+// after — every Config.get(...)/set(...) call site stays as it is
+export const Config = Kfg.pool(schema, {
+  driver: (id) => new JsonDriver({ path: `data/${id}/config.json` }),
+});
+```
+
+While call sites are being moved into scopes, set `defaultScope` so untouched
+code keeps working, and use `missingScopeCount` / `onMissingScope` to find what
+is still running outside a scope. Remove `defaultScope` when the count reaches
+zero — after that, a scope-less call fails loudly.
+
 ---
 
 ## Drivers
@@ -248,9 +283,10 @@ All writes (both drivers) go through `src/utils/safe-write.ts`:
   processes. A lock owned by a dead PID is stolen immediately (handles crash +
   restart); otherwise a time-based staleness window (10s) is the backstop.
 - **Backups** (`allow_backup`, default `true`): after each successful write the
-  file is mirrored to `<file>.bak` (or a custom path if a string is given;
-  `false` disables). `JsonDriver.load` auto-restores from this mirror when the
-  main file is unreadable.
+  same verified content is also written to `<file>.bak` (or a custom path if a
+  string is given; `false` disables). The mirror is always the last valid
+  state — never a stale one — and `JsonDriver.load` auto-restores from it when
+  the main file is unreadable.
 
 ### Lost updates and transactions
 
@@ -329,6 +365,24 @@ Reusable utilities for file-backed drivers (from `kfg`): `safeWriteFileSync`,
 `safeMutateFileSync`, `safeReadFileSync`, `withFileLock`, `backupPathFor`.
 
 ---
+
+## Cost model
+
+Useful when deciding how to structure calls (orders of magnitude, measured on
+Windows/NTFS with a 180-leaf schema; absolute disk figures are lower on Linux,
+the proportions hold):
+
+- **Reads are free.** `get`/`has`/`config.x` are ~0.03 us — dot paths are
+  memoized, and reading many distinct paths costs the same as repeating one.
+  There is no reason to cache a `get` result for performance.
+- **Writes are I/O, not validation.** A `set` is ~2.8 ms, of which validation
+  is ~0.05 ms; the rest is the lock, the verified write and the backup mirror.
+- **Batch writes with `mutate`.** Ten `set` calls cost ~28 ms; the same ten
+  keys in one `mutate(fn)` cost ~3 ms. Any code path that writes several keys
+  in a row should use `mutate` — it is also the transactional path.
+- **Pools add nothing to reads.** A pooled read costs the same as a direct one
+  (`run()` adds ~0.02 us for the async-context lookup). Schemas are compiled
+  once and shared, so extra scopes cost only their own cached data.
 
 ## Links
 

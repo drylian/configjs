@@ -1,24 +1,25 @@
 # K(con)fg - Simple, Type-Safe Configuration Management
 
 [![npm version](https://badge.fury.io/js/kfg.svg)](https://badge.fury.io/js/kfg)
-[![Documentation](https://github.com/drylian/kfg/actions/workflows/docs.yml/badge.svg)](https://kfg.drylian.com/)
+[![Build](https://github.com/drysius/kfg/actions/workflows/build.yaml/badge.svg)](https://github.com/drysius/kfg/actions/workflows/build.yaml)
+[![Documentation](https://github.com/drysius/kfg/actions/workflows/docs.yml/badge.svg)](https://kfg.js.org/)
 
-Kfg is a robust and 100% type-safe configuration management system for Node.js and Bun applications. It provides a structured way to define, validate, and access environment variables and other configuration sources with the power of TypeScript.
+Kfg is a robust and 100% type-safe configuration management system for Node.js, Bun, and Deno. It provides a structured way to define, validate, and access environment variables and other configuration sources with the power of TypeScript.
 
 - ✅ **Fully Typed**: Autocomplete and type safety for all your configurations.
 - ✅ **Flexible Drivers**: Load configurations from `.env` files, JSON, or create your own driver.
 - ✅ **Built-in Validation**: Define rules and formats (email, url, etc.) directly in the schema.
 - ✅ **Smart Defaults**: Define defaults that are applied automatically.
 - ✅ **Nested Structures**: Organize your configurations logically.
-- ✅ **File-based Configuration**: Manage configurations across multiple files with `Kfg`.
-
-- ✅ **Relations**: Create one-to-one and one-to-many relations between configurations.
+- ✅ **Scoped Pools**: One configuration per tenant, guild, or project — same API, no call-site changes.
+- ✅ **Safeguarded Writes**: Atomic write + verify, cross-process locking, backup with auto-recovery.
 
 ---
 
 ## 📖 Documentation
 
-- **[Full Usage Guide](https://kfg.drylian.com/)**: Learn how to install and use Kfg.
+- **[Full Usage Guide](https://kfg.js.org/)**: Learn how to install and use Kfg.
+- **[llms.txt](https://kfg.js.org/llms.txt)**: Machine-readable reference for AI tools and agents.
 
 ## Installation
 
@@ -51,11 +52,10 @@ export const AppSchema = {
 **2. Create and load your instance (`config.ts`):**
 
 ```typescript
-import { Kfg } from "kfg";
-import { envDriver } from "kfg/drivers";
+import { Kfg, EnvDriver } from "kfg";
 import { AppSchema } from "./schema";
 
-const config = new Kfg(envDriver, AppSchema);
+const config = new Kfg(new EnvDriver(), AppSchema);
 config.load(); // Loads values from .env and process.env
 
 export default config;
@@ -75,44 +75,37 @@ console.log(`Server running on port ${port}`);
 // config.set("server.port", "not-a-number");
 ```
 
-## File-based Configuration with `Kfg`
+## File-based Configuration with `JsonDriver`
 
-`Kfg` allows you to manage configurations across multiple files, which is useful for managing configurations for different users, tenants, or environments.
-
-**1. Define your schemas:**
+`JsonDriver` persists the configuration to a JSON file, with the same API and typing:
 
 ```typescript
-import { Kfg, c, cfs, jsonDriver } from "kfg";
+import { Kfg, JsonDriver, c } from "kfg";
 
-const inventory = new Kfg(jsonDriver, {
-    items: c.array(c.string()),
+const config = new Kfg(new JsonDriver({ path: "resources/config.json" }), {
+  items: c.array(c.string(), { default: [] }),
+  owner: c.string({ default: "unknown" }),
 });
 
-const user = new Kfg(jsonDriver, {
-    name: c.string(),
-    inventory_ids: cfs.many(inventory),
+config.load();
+config.set("owner", "Alice");
+config.set("items", ["sword", "shield"]);
+```
+
+Every write goes through the safeguard layer: the content is written to a temp
+file, read back and verified, then atomically renamed over the target, under a
+lock file that keeps concurrent processes from clobbering each other. A mirror
+is kept in `<file>.bak` and restored automatically if the main file is ever
+corrupted.
+
+When several keys change at once, write them in a single transaction instead of
+one `set` per key — it is both atomic across processes and far cheaper:
+
+```typescript
+config.mutate((draft) => {
+  draft.owner = "Alice";
+  draft.items = ["sword", "shield"];
 });
-```
-
-**2. Initialize `Kfg`:**
-
-```typescript
-inventory.init((id) => `resources/inventory/${id}.json`);
-user.init((id) => `resources/users/${id}.json`);
-```
-
-**3. Use it:**
-
-```typescript
-const user1 = user.file("user-1");
-user1.set("name", "Alice");
-
-const inv1 = inventory.file("inv-1");
-inv1.set("items", ["sword", "shield"]);
-
-user1.set("inventory_ids", [inv1]);
-
-const user1Inventories = await user1.getMany("inventory_ids");
 ```
 
 ## Scoped Configuration with `Kfg.pool`

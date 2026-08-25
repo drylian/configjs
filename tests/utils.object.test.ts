@@ -1,5 +1,5 @@
 import { describe, it, test, expect } from 'bun:test';
-import { flattenObject, unflattenObject, getProperty, pathSegments, setProperty, deepMerge, isObject } from '../src/utils/object';
+import { flattenObject, unflattenObject, cloneBranch, getProperty, pathSegments, setProperty, deepMerge, isObject } from '../src/utils/object';
 
 describe('Utils: object.ts', () => {
     describe('getProperty()', () => {
@@ -120,5 +120,41 @@ describe("pathSegments cache", () => {
 		expect(getProperty(obj, "a.b.c")).toBe(7);
 		expect(getProperty(obj, "a.b")).toEqual({ c: 7 });
 		expect(getProperty(obj, "missing.deep.path")).toBeUndefined();
+	});
+});
+
+describe("cloneBranch", () => {
+	test("copies only the spine, sharing untouched siblings", () => {
+		const root = { a: { b: { c: 1 }, sibling: { keep: true } }, other: [1, 2] };
+		const next = cloneBranch(root, "a.b.c");
+
+		expect(next).not.toBe(root);
+		expect(next.a).not.toBe(root.a);
+		expect(next.a.b).not.toBe(root.a.b);
+		// untouched branches are shared, not copied
+		expect(next.a.sibling).toBe(root.a.sibling);
+		expect(next.other).toBe(root.other);
+	});
+
+	test("writing into the copy leaves the original intact", () => {
+		const root = { a: { b: { c: 1 } } };
+		const next = cloneBranch(root, "a.b.c");
+		setProperty(next, "a.b.c", 99);
+
+		expect(next.a.b.c).toBe(99);
+		expect(root.a.b.c).toBe(1);
+	});
+
+	test("handles missing intermediates and single segments", () => {
+		expect(cloneBranch({ a: 1 }, "a")).toEqual({ a: 1 });
+		const next = cloneBranch({ a: 1 } as any, "x.y.z");
+		setProperty(next, "x.y.z", 5);
+		expect(next.x.y.z).toBe(5);
+	});
+
+	test("refuses to copy through prototype keys", () => {
+		const next = cloneBranch({ a: 1 } as any, "__proto__.polluted");
+		setProperty(next, "__proto__.polluted", true);
+		expect(({} as any).polluted).toBeUndefined();
 	});
 });

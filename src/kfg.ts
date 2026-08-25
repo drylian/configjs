@@ -18,9 +18,11 @@ import type {
 	StaticSchema,
 } from "./types";
 import {
+	cloneBranch,
 	deepMerge,
 	deleteProperty,
 	getProperty,
+	pathSegments,
 	setProperty,
 } from "./utils/object";
 import { compileSchema, optionalSchema } from "./utils/schema";
@@ -32,6 +34,9 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	public readonly "~driver": D;
 	public readonly "~schema": { defined: S; compiled: TObject };
 	private "~lastLoadOptions"?: KfgLoadOptions<D> | undefined;
+
+	/** Memoized schema-node lookups by dot path (see getSchemaAtPath). */
+	private readonly "~schemaNodeCache" = new Map<string, any>();
 
 	// Internal state
 	public "~cache": Record<string, any> = {};
@@ -223,18 +228,11 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			});
 		}
 
-		const original = structuredClone(this["~cache"]);
-		setProperty(this["~cache"], path as string, value);
-
-		try {
-			this["~cache"] = this.validateAndClean(
-				this["~cache"],
-				this["~schema"].compiled,
-			);
-		} catch (e) {
-			this["~cache"] = original;
-			throw e;
-		}
+		// Apply to a copy-on-write branch: if validation rejects it, the draft is
+		// simply discarded and the cache was never touched.
+		const draft = cloneBranch(this["~cache"], path as string);
+		setProperty(draft, path as string, value);
+		this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
 
 		if (this["~driver"].update) {
 			return this["~driver"].update(path as string, value, description) as any;
@@ -270,21 +268,17 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			});
 		}
 
-		const original = structuredClone(this["~cache"]);
-		Object.assign(currentObject, partial);
-
-		try {
-			this["~cache"] = this.validateAndClean(
-				this["~cache"],
-				this["~schema"].compiled,
-			);
-		} catch (e) {
-			this["~cache"] = original;
-			throw e;
-		}
+		// Replace the target with a merged copy rather than assigning into the
+		// cached object, so a rejected insert leaves nothing behind.
+		const draft = cloneBranch(this["~cache"], path as string);
+		setProperty(draft, path as string, { ...currentObject, ...partial });
+		this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
 
 		if (this["~driver"].update) {
-			return this["~driver"].update(path as string, currentObject) as any;
+			return this["~driver"].update(
+				path as string,
+				getProperty(this["~cache"], path as string),
+			) as any;
 		} else {
 			return this["~driver"].save(this["~cache"]) as any;
 		}
@@ -297,18 +291,9 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			return this.runMutation((draft) => deepMerge(draft as any, data) as any);
 		}
 
-		const original = structuredClone(this["~cache"]);
-		this["~cache"] = deepMerge(this["~cache"], data);
-
-		try {
-			this["~cache"] = this.validateAndClean(
-				this["~cache"],
-				this["~schema"].compiled,
-			);
-		} catch (e) {
-			this["~cache"] = original;
-			throw e;
-		}
+		// deepMerge already returns a new tree, so there is nothing to roll back.
+		const draft = deepMerge(this["~cache"], data);
+		this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
 
 		return this["~driver"].save(this["~cache"]) as any;
 	}
@@ -325,21 +310,13 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 			});
 		}
 
-		const original = structuredClone(this["~cache"]);
-		const deleted = deleteProperty(this["~cache"], path as string);
+		const draft = cloneBranch(this["~cache"], path as string);
+		const deleted = deleteProperty(draft, path as string);
 
 		if (!deleted)
 			return (this["~driver"].async ? Promise.resolve() : undefined) as any;
 
-		try {
-			this["~cache"] = this.validateAndClean(
-				this["~cache"],
-				this["~schema"].compiled,
-			);
-		} catch (e) {
-			this["~cache"] = original;
-			throw e;
-		}
+		this["~cache"] = this.validateAndClean(draft, this["~schema"].compiled);
 
 		if (this["~driver"].delete) {
 			return this["~driver"].delete(path as string) as any;
@@ -432,10 +409,25 @@ export class Kfg<D extends KfgDriver<any, any>, S extends SchemaDefinition>
 	/**
 	 * Resolves a schema node by dot path, descending through `.properties`
 	 * when a segment is a compiled TypeBox object (e.g. created with c.Object).
+	 *
+	 * Memoized per instance: this runs on every `set` that does not carry an
+	 * explicit description, and the schema never changes after construction.
+	 * `undefined` results are cached too — a path with no schema node is the
+	 * common case for free-form sections, and re-walking it every time is the
+	 * same wasted work.
 	 */
 	private getSchemaAtPath(path: string): any {
+		const cache = this["~schemaNodeCache"];
+		if (cache.has(path)) return cache.get(path);
+
+		const node = this.resolveSchemaAtPath(path);
+		cache.set(path, node);
+		return node;
+	}
+
+	private resolveSchemaAtPath(path: string): any {
 		let node: any = this["~schema"].defined;
-		for (const segment of path.split(".")) {
+		for (const segment of pathSegments(path)) {
 			if (node === undefined || node === null) return undefined;
 			if (
 				node[Symbol.for("TypeBox.Kind")] &&

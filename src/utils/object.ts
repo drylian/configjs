@@ -43,6 +43,48 @@ export function getProperty<T extends Record<string, any>>(
 }
 
 /**
+ * Copies `root` and every object along `path`, sharing everything else by
+ * reference (copy-on-write spine).
+ *
+ * Writing into the result never touches `root`, at O(depth) instead of the
+ * O(size) of a full clone — which is what a mutation needs in order to be
+ * abandoned safely when validation rejects it.
+ *
+ * @param root The object to copy the spine of.
+ * @param path The dot path that is about to be written.
+ * @returns A new root that can be mutated at `path` in isolation.
+ */
+export function cloneBranch<T extends Record<string, any>>(
+	root: T,
+	path: string,
+): T {
+	const segments = pathSegments(path);
+	const next: any = Array.isArray(root) ? [...root] : { ...root };
+
+	let source: any = root;
+	let target: any = next;
+	// The last segment is the value being written, so only its ancestors are
+	// copied.
+	for (let i = 0; i < segments.length - 1; i++) {
+		const key = segments[i];
+		if (key === "__proto__" || key === "constructor" || key === "prototype") {
+			// setProperty refuses these paths outright; copying them would be the
+			// prototype write it exists to prevent.
+			break;
+		}
+		const child = source?.[key];
+		if (child === null || typeof child !== "object") break;
+
+		const copy = Array.isArray(child) ? [...child] : { ...child };
+		target[key] = copy;
+		source = child;
+		target = copy;
+	}
+
+	return next;
+}
+
+/**
  * Sets a property on an object using a dot-separated path.
  * @param obj The object to set the property on.
  * @param path The path to the property.

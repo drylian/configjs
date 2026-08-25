@@ -61,5 +61,8 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.47"
+  },
+  "overrides": {
+    "typescript": "^5.9.3"
   }
 }

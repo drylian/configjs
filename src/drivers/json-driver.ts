@@ -121,10 +121,6 @@ export class JsonDriver extends KfgDriver<
 		options?: { path?: string; description?: string },
 	): void {
 		const filePath = this.getFilePath();
-		const dir = path.dirname(filePath);
-		if (!fs.existsSync(dir)) {
-			fs.mkdirSync(dir, { recursive: true });
-		}
 
 		safeWriteFileSync(filePath, this.serializeData(data, options), {
 			backup: this.config.allow_backup ?? true,

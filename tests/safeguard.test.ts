@@ -242,3 +242,25 @@ describe("backup directory creation", () => {
 		}
 	});
 });
+
+describe("target directory creation", () => {
+	test("creates missing nested directories on first write", () => {
+		const deep = path.join(tmpDir, `deep-${Date.now()}`, "a", "b", "c.json");
+		safeWriteFileSync(deep, '{"x":1}');
+		expect(fs.readFileSync(deep, "utf-8")).toBe('{"x":1}');
+		// second write takes the fast path, directory already present
+		safeWriteFileSync(deep, '{"x":2}');
+		expect(fs.readFileSync(deep, "utf-8")).toBe('{"x":2}');
+		expect(fs.existsSync(`${deep}.bak`)).toBe(true);
+	});
+
+	test("JsonDriver creates its directory without a per-save stat", () => {
+		const file = path.join(tmpDir, `jd-${Date.now()}`, "nested", "config.json");
+		const kfg = new Kfg(new JsonDriver({ path: file }), {
+			port: c.Number({ default: 3000 }),
+		});
+		kfg.load();
+		kfg.set("port", 8080);
+		expect(JSON.parse(fs.readFileSync(file, "utf-8")).port).toBe(8080);
+	});
+});

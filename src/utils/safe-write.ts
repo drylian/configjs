@@ -88,6 +88,13 @@ function acquireLock(filePath: string, timeoutMs: number): string {
 			fs.writeFileSync(lockPath, String(process.pid), { flag: "wx" });
 			return lockPath;
 		} catch (e: any) {
+			// First write into a new directory: create it and retry. Checking
+			// upfront would cost a syscall on every save to cover a case that
+			// happens once per file.
+			if (e?.code === "ENOENT") {
+				fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+				continue;
+			}
 			if (e?.code !== "EEXIST") throw e;
 
 			// If the lock owner crashed, steal immediately instead of waiting

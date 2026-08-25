@@ -13,6 +13,7 @@ Kfg is a robust and 100% type-safe configuration management system for Node.js, 
 - ✅ **Nested Structures**: Organize your configurations logically.
 - ✅ **Scoped Pools**: One configuration per tenant, guild, or project — same API, no call-site changes.
 - ✅ **Safeguarded Writes**: Atomic write + verify, cross-process locking, backup with auto-recovery.
+- ✅ **Sync or Async**: `JsonDriver` blocks; `JsonAsyncDriver` does the same work without stalling the event loop.
 
 ---
 

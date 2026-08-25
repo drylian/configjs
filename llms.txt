@@ -268,6 +268,28 @@ new JsonDriver({
 - Persists pretty JSON; preserves per-key descriptions as `:comment` siblings.
 - On load, recovers from the backup if the main file is corrupted.
 
+### JsonAsyncDriver
+
+Same file format and same safeguards as `JsonDriver`, but every file operation
+is promise-based — including waiting for a contended write lock, which yields
+instead of blocking the thread. Use it in a server, where a `set` queued behind
+another writer should not stall everything else.
+
+```ts
+const kfg = new Kfg(new JsonAsyncDriver({ path: "config.json" }), schema);
+await kfg.load();
+await kfg.set("server.port", 8080);
+kfg.get("server.port"); // reads stay synchronous — they hit the cache
+```
+
+Because `async: true`, every method that touches the driver returns a Promise
+(`load`, `save`, `set`, `insert`, `inject`, `del`, `mutate`, `toJSON`) and
+rejects rather than throwing — validation failures included. Reads (`get`,
+`has`, `conf`, `config`) stay synchronous.
+
+`lazy` and `Kfg.pool` require a synchronous driver: both materialize state on
+first access, which cannot happen behind a synchronous `get()`.
+
 ---
 
 ## Safeguarded persistence
@@ -362,7 +384,11 @@ the class as `KfgDriver<Config, true>`; every method returns a `Promise`, and
 `Kfg`'s methods will too.
 
 Reusable utilities for file-backed drivers (from `kfg`): `safeWriteFileSync`,
-`safeMutateFileSync`, `safeReadFileSync`, `withFileLock`, `backupPathFor`.
+`safeMutateFileSync`, `safeReadFileSync`, `withFileLock`, `backupPathFor` — and
+their async counterparts `safeWriteFile`, `safeMutateFile`, `safeReadFile` and
+`withFileLockAsync`, which carry the same guarantees without blocking the
+thread. `JsonDriverBase` can be extended if you want a JSON-compatible driver
+with a different storage backend.
 
 ---
 
@@ -377,6 +403,11 @@ the proportions hold):
   There is no reason to cache a `get` result for performance.
 - **Writes are I/O, not validation.** A `set` is ~2.8 ms, of which validation
   is ~0.05 ms; the rest is the lock, the verified write and the backup mirror.
+  With `JsonDriver` that time blocks the thread — use `JsonAsyncDriver` in a
+  server if that matters.
+- **Rejected writes are cheap.** A mutation applies to a copy-on-write branch
+  (root plus the path's ancestors), so nothing is cloned up front and a failed
+  validation costs nothing to undo.
 - **Batch writes with `mutate`.** Ten `set` calls cost ~28 ms; the same ten
   keys in one `mutate(fn)` cost ~3 ms. Any code path that writes several keys
   in a row should use `mutate` — it is also the transactional path.
